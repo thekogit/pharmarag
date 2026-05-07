@@ -30,9 +30,17 @@ synth_prompt = ChatPromptTemplate.from_messages([
 
 import os
 from dotenv import load_dotenv
-from src.vector_store import VectorStore
 
-load_dotenv()
+# Find the project root (one level up from src/)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_path = os.path.join(project_root, '.env')
+
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+else:
+    load_dotenv()
+
+from src.vector_store import VectorStore
 
 llm = ChatOpenAI(
     base_url=os.getenv("OPENAI_API_BASE", "http://localhost:8080/v1"), api_key=os.getenv("OPENAI_API_KEY", "none"),
