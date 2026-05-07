@@ -31,40 +31,53 @@ The ingestion pipeline is capable of handling unstructured and semi-structured d
 5. **PDF Parsing (`src/ingest.py`)**
    *   `PyMuPDF` is implemented for fast text extraction, and `pdfplumber` is utilized for the structural extraction of complex regulatory tables.
 
-## Quick Start (Hybrid Docker/Local)
+## 🛠 Configuration
 
-The vector database runs in Docker, while the `llama.cpp` inference engine runs natively on the host to utilize a custom Windows `turboquant` build that supports `iso3` KV cache compression.
+Pharma-RAG uses environment variables for all local paths and connection settings. 
 
-1. **Configuration**:
-   Copy the example environment file to create your local configuration:
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` to configure your environment. You must set `LLAMA_SERVER_PATH` to the absolute path of your `llama-server.exe` and ensure `MODEL_PATH` points to your downloaded model. (The `.env` file is ignored by git).
-   
-2. **Download Weights**: 
-   The model file `Qwen3.5-9B-DeepSeek-V4-Flash.i1-Q5_K_S.gguf` must be downloaded and placed directly into the `./models/` folder. 
+### 1. Create your `.env` file
+Copy the provided template to start:
+```bash
+cp .env.example .env
+```
 
-3. **Boot the Vector DB**:
+### 2. Configure Variable Definitions
+Open `.env` and fill in the following keys:
+
+| Variable | Description | Example / Default |
+| :--- | :--- | :--- |
+| `LLAMA_SERVER_PATH` | **REQUIRED**. Absolute path to your compiled `llama-server.exe`. | `C:\tools\llama-server.exe` |
+| `MODEL_PATH` | **REQUIRED**. Path to your GGUF model file. | `./models/qwen3.5-9b.gguf` |
+| `LLAMA_PORT` | The port the local LLM server will listen on. | `8080` |
+| `NGL` | Number of layers to offload to GPU (set 0 for CPU-only). | `99` |
+| `QDRANT_HOST` | Hostname for your Qdrant instance. | `localhost` |
+| `QDRANT_PORT` | Port for your Qdrant instance. | `6333` |
+| `OPENAI_API_BASE` | Base URL for LLM requests (matches local server). | `http://localhost:8080/v1` |
+
+### 3. Troubleshooting Setup
+- **Server Not Starting:** Ensure `LLAMA_SERVER_PATH` is the absolute path to the `.exe`, not just the folder.
+- **Connection Refused:** If Qdrant is in Docker, ensure `QDRANT_PORT` matches the port mapped in your `docker-compose.yml`.
+- **Empty Answers:** Check the `DEBUG` logs in the terminal. If "Retrieved 0 documents" appears, verify that you have run the ingestion script first.
+
+---
+
+## 🚀 Usage
+
+The vector database runs in Docker, while the `llama.cpp` inference engine is managed automatically by the application.
+
+1. **Boot the Vector DB**:
    ```bash
    docker-compose up -d
    ```
-   The `pharmarag-qdrant` vector database will be started.
 
-4. **Start the Inference Engine**:
-   The local inference script is run via:
-   ```bash
-   python src/engine.py
-   ```
-
-5. **Ingest Documents**:
-   The ingestion script is used to parse a PDF, chunk it, embed it on the CPU, and push it to Qdrant:
+2. **Ingest Documents**:
+   Parse a PDF, chunk it, and push it to the vector store:
    ```bash
    python ingest_pdf.py path/to/your/document.pdf "FDA" "Guidance Document"
    ```
 
-6. **Query the System (Chat)**:
-   The interactive CLI can be launched to query the local model against the ingested documents:
+3. **Query the System (Chat)**:
+   The interactive CLI will automatically start the `llama-server` if it is not running:
    ```bash
    python chat.py
    ```
