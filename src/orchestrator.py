@@ -69,7 +69,19 @@ def retrieve_node(s: RAGState):
         query=vector,
         limit=3
     ).points
-    docs = [{"text": hit.payload.get("text", ""), "meta": hit.payload.get("meta", {})} for hit in search_result]
+    
+    docs = []
+    for hit in search_result:
+        p = hit.payload or {}
+        # Support nested structure (current) or flat structure (legacy/other)
+        text = p.get("text") or p.get("content") or ""
+        meta = p.get("meta")
+        
+        if not meta or not isinstance(meta, dict):
+            # If meta is missing or not a dict, treat the whole payload as meta
+            meta = {k: v for k, v in p.items() if k not in ["text", "content"]}
+            
+        docs.append({"text": text, "meta": meta})
 
     # Fallback if DB is empty
     if not docs:
@@ -79,11 +91,21 @@ def retrieve_node(s: RAGState):
 
 def synth_node(s: RAGState):
     print(f"DEBUG: Retrieved {len(s['docs'])} documents.")
+    for i, d in enumerate(s['docs']):
+        print(f"DEBUG: Doc {i} source: {d['meta'].get('source', 'Unknown')}")
+        print(f"DEBUG: Doc {i} text snippet: {d['text'][:50]}...")
+
     ctx = "\n\n---\n\n".join(
         f"SOURCE METADATA: [{d['meta'].get('source','Unknown')} | {d['meta'].get('doc_type','Unknown')}]\nCONTENT:\n{d['text']}" 
         for d in s["docs"]
     )
-    print(f"DEBUG: Context length: {len(ctx)} chars.")
+    print(f"DEBUG: Total Context length: {len(ctx)} chars.")
+    
+    # Check if we are sending any actual content to the LLM
+    has_content = any(len(d['text'].strip()) > 0 for d in s['docs'])
+    if not has_content:
+        print("DEBUG: No document content found. LLM might refuse to answer.")
+
     answer = (synth_prompt | llm | StrOutputParser()).invoke({"ctx": ctx, "q": s["question"]})
     return {**s, "answer": answer}
 
