@@ -2,12 +2,6 @@ import fitz  # PyMuPDF
 import pdfplumber
 
 class PDFIngestor:
-    """
-    Look, most PDF loaders are garbage and choke on complex FDA or EMA tables.
-    We use PyMuPDF for raw text extraction because it's fast, and pdfplumber 
-    when we actually need to pull structural data without mangling it into 
-    a useless string of spaces.
-    """
     def __init__(self):
         pass
 
