@@ -1,0 +1,12 @@
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: pharmarag-qdrant
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    env_file:
+      - .env
+    restart: unless-stopped
