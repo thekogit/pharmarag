@@ -3,13 +3,26 @@ import sys
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+# Find the project root (one level up from src/)
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+env_path = os.path.join(project_root, '.env')
+
+if os.path.exists(env_path):
+    load_dotenv(env_path)
+else:
+    # Fallback to default load_dotenv behavior
+    load_dotenv()
 
 class InferenceEngine:
     def __init__(self):
         # Load from .env with fallbacks
         self.server_path = os.getenv("LLAMA_SERVER_PATH")
-        self.model_path = os.getenv("MODEL_PATH", "./models/model.gguf")
+        # Support legacy env keys if present
+        legacy_model_dir = os.getenv("MODELS_DIR", "./models")
+        legacy_model_name = os.getenv("MODEL_NAME", "model.gguf")
+        legacy_model_path = os.path.join(legacy_model_dir, legacy_model_name)
+        
+        self.model_path = os.getenv("MODEL_PATH", legacy_model_path)
         self.ngl = os.getenv("NGL", "99")
         self.cache_type_k = os.getenv("CACHE_TYPE_K", "iso3")
         self.cache_type_v = os.getenv("CACHE_TYPE_V", "iso3")
@@ -20,8 +33,13 @@ class InferenceEngine:
         """
         Starts the llama-server. We enforce RotorQuant iso3 compression.
         """
-        if not self.server_path or not os.path.exists(self.server_path):
-            print(f"FATAL: llama-server not found at {self.server_path}. Check .env")
+        if not self.server_path:
+            print("FATAL: LLAMA_SERVER_PATH not found in environment.")
+            print("Please add 'LLAMA_SERVER_PATH=C:\\path\\to\\llama-server.exe' to your .env file.")
+            sys.exit(1)
+            
+        if not os.path.exists(self.server_path):
+            print(f"FATAL: llama-server not found at {self.server_path}. Check your .env path.")
             sys.exit(1)
             
         cmd = [
