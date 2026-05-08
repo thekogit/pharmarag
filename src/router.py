@@ -12,8 +12,8 @@ class RegulatoryRouter:
         }
 
     def parse(self, text: str) -> dict[str, str]:
-        sections = {"GENERAL": ""}
-        current_section = "GENERAL"
+        sections = {"UNCLASSIFIED": ""}
+        current_section = "UNCLASSIFIED"
         
         lines = text.splitlines()
         for line in lines:
