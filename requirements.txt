@@ -4,7 +4,7 @@ pdfplumber==0.11.0
 
 # Vector DB & Embeddings
 qdrant-client>=1.9.0
-sentence-transformers==2.7.0
+sentence-transformers>=3.0.0
 fastembed>=0.5.0
 
 # LangGraph & Logic
