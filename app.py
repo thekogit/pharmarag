@@ -1,6 +1,8 @@
 import chainlit as cl
-from src.orchestrator import rag_app
+from src.orchestrator import rag_app, get_vs
+from src.engine import InferenceEngine
 import os
+import time
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -9,18 +11,37 @@ load_dotenv()
 @cl.on_chat_start
 async def start():
     """
-    Initializes the session and sends a welcome message.
+    Initializes the session, starts the inference engine, and checks dependencies.
     """
+    # 1. Start Inference Engine (llama-server) if not running
+    engine = InferenceEngine()
+    if not engine.is_running():
+        await cl.Message(content="Starting Inference Engine (llama-server)...").send()
+        engine.start(wait=False)
+        # Give it a few seconds to initialize
+        time.sleep(5)
+    
+    # 2. Check Qdrant Connection
+    vs = get_vs()
+    qdrant_status = "Connected"
+    try:
+        # Simple health check
+        vs.client.get_collections()
+    except Exception:
+        qdrant_status = "Disconnected (Check Docker/Qdrant)"
+        await cl.Message(
+            content="⚠️ **Critical Error: Qdrant is not reachable.**\nPlease ensure your Qdrant container is running: `docker-compose up -d`"
+        ).send()
+
     cl.user_session.set("rag_app", rag_app)
     
     await cl.Message(
-        content="""# PharmaRAG Assistant Initialized
-Welcome! I am your AI assistant for pharmaceutical regulatory and clinical data.
-I can answer questions based on:
-- FDA Drug Labels
-- ClinicalTrials.gov data
-- PubMed abstracts
-- Specialized regulatory PDFs
+        content=f"""# PharmaRAG Assistant Initialized
+Status:
+- Inference Engine: **{'Running' if engine.is_running() else 'Starting/Error'}**
+- Vector DB (Qdrant): **{qdrant_status}**
+
+Welcome! I can answer questions based on FDA Labels, ClinicalTrials, and PubMed.
 
 **Ask me a question to get started.**"""
     ).send()
