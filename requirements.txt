@@ -15,3 +15,9 @@ langchain-qdrant
 python-dotenv
 
 biopython>=1.83
+
+# API & UI Exposure
+fastapi>=0.110.0
+uvicorn>=0.27.0
+chainlit>=1.0.400
+python-multipart
