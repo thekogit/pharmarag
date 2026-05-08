@@ -23,5 +23,29 @@ class OpenFDAFetcher:
         """
         Transforms openFDA JSON into standardized sections.
         """
-        # Minimal implementation for now
-        return {}
+        mapping = {
+            "indications_and_usage": "INDICATIONS",
+            "dosage_and_administration": "DOSAGE",
+            "contraindications": "CONTRAINDICATIONS",
+            "warnings": "WARNINGS",
+            "warnings_and_precautions": "WARNINGS",
+            "adverse_reactions": "ADVERSE_REACTIONS",
+            "clinical_studies": "CLINICAL_STUDIES"
+        }
+        
+        transformed = {}
+        for fda_field, section_name in mapping.items():
+            if fda_field in result:
+                value = result[fda_field]
+                if isinstance(value, list):
+                    text = "\n".join(value)
+                else:
+                    text = str(value)
+                
+                # If section already exists (e.g. warnings and warnings_and_precautions), append
+                if section_name in transformed:
+                    transformed[section_name] += "\n" + text
+                else:
+                    transformed[section_name] = text
+                    
+        return transformed

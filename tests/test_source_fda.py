@@ -25,5 +25,31 @@ class TestOpenFDAFetcher(unittest.TestCase):
         self.assertIn("https://api.fda.gov/drug/label.json", mock_get.call_args[0][0])
         self.assertIn('brand_name:"ibuprofen"', mock_get.call_args[0][0])
 
+    def test_transform(self):
+        sample_result = {
+            "indications_and_usage": ["For relief of pain."],
+            "dosage_and_administration": ["Take 1 tablet."],
+            "contraindications": ["None."],
+            "warnings": ["May cause drowsiness."],
+            "adverse_reactions": ["Nausea."],
+            "clinical_studies": ["Study A showed X."]
+        }
+        transformed = self.fetcher.transform(sample_result)
+        
+        # Verify mapping
+        self.assertEqual(transformed["INDICATIONS"], "For relief of pain.")
+        self.assertEqual(transformed["DOSAGE"], "Take 1 tablet.")
+        self.assertEqual(transformed["CONTRAINDICATIONS"], "None.")
+        self.assertEqual(transformed["WARNINGS"], "May cause drowsiness.")
+        self.assertEqual(transformed["ADVERSE_REACTIONS"], "Nausea.")
+        self.assertEqual(transformed["CLINICAL_STUDIES"], "Study A showed X.")
+
+    def test_transform_with_list_joining(self):
+        sample_result = {
+            "indications_and_usage": ["Indication 1", "Indication 2"]
+        }
+        transformed = self.fetcher.transform(sample_result)
+        self.assertEqual(transformed["INDICATIONS"], "Indication 1\nIndication 2")
+
 if __name__ == "__main__":
     unittest.main()
