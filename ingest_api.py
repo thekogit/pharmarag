@@ -28,6 +28,12 @@ def main():
     print(f"Fetching from {args.source} for query: {args.query}...")
 
     chunks_to_ingest = []
+    
+    common_context = {
+        "source": args.source.upper(),
+        "compound": args.compound,
+        "date": date_val
+    }
 
     if args.source == "clinical_trials":
         fetcher = ClinicalTrialsFetcher()
@@ -35,9 +41,9 @@ def main():
         try:
             data = fetcher.fetch_by_id(args.query)
             sections = fetcher.transform(data)
-            chunks = ingestor.chunk_sections(sections)
-            for c in chunks:
-                c["doc_type"] = "Clinical Trial"
+            context = common_context.copy()
+            context["doc_type"] = "Clinical Trial"
+            chunks = ingestor.chunk_sections(sections, context)
             chunks_to_ingest.extend(chunks)
         except Exception as e:
             print(f"Error fetching from ClinicalTrials.gov: {e}")
@@ -47,9 +53,9 @@ def main():
         results = fetcher.fetch_by_name(args.query, limit=args.limit)
         for res in results:
             sections = fetcher.transform(res)
-            chunks = ingestor.chunk_sections(sections)
-            for c in chunks:
-                c["doc_type"] = "Drug Label"
+            context = common_context.copy()
+            context["doc_type"] = "Drug Label"
+            chunks = ingestor.chunk_sections(sections, context)
             chunks_to_ingest.extend(chunks)
 
     elif args.source == "pubmed":
@@ -57,23 +63,15 @@ def main():
         results = fetcher.fetch_abstracts(args.query, limit=args.limit)
         for res in results:
             sections = fetcher.transform(res)
-            chunks = ingestor.chunk_sections(sections)
-            for c in chunks:
-                # PubMed records might have their own date
-                c["doc_type"] = "Journal Article"
+            context = common_context.copy()
+            context["doc_type"] = "Journal Article"
+            chunks = ingestor.chunk_sections(sections, context)
             chunks_to_ingest.extend(chunks)
 
     print(f"Ingesting {len(chunks_to_ingest)} chunks into Vector Store...")
     for i, chunk in enumerate(chunks_to_ingest):
-        payload = {
-            "id": str(uuid.uuid4()),
-            "source": args.source.upper(),
-            "doc_type": chunk.get("doc_type", "API Data"),
-            "section_name": chunk["metadata"]["section"],
-            "chunk_index": i,
-            "compound": args.compound,
-            "date": date_val
-        }
+        payload = chunk["metadata"].copy()
+        payload["id"] = str(uuid.uuid4())
         vs.ingest(chunk["text"], payload)
         if i % 10 == 0:
             print(f"  Ingested {i}/{len(chunks_to_ingest)} chunks...")

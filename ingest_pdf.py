@@ -28,7 +28,13 @@ def main():
 
     print(f"Parsing PDF: {pdf_path}")
     ingestor = PDFIngestor()
-    chunks = ingestor.process(pdf_path)
+    context = {
+        "source": source_name,
+        "doc_type": doc_type,
+        "compound": args.compound,
+        "date": args.date
+    }
+    chunks = ingestor.process(pdf_path, context)
     print(f"Split into {len(chunks)} chunks using hierarchical routing.")
 
     print("Connecting to Qdrant Vector Store...")
@@ -39,15 +45,8 @@ def main():
 
     print("Embedding and storing chunks. This will hit your CPU hard. Wait...")
     for i, chunk in enumerate(chunks):
-        payload = {
-            "id": str(uuid.uuid4()),
-            "source": source_name,
-            "doc_type": doc_type,
-            "section_name": chunk['metadata']['section'],
-            "chunk_index": i,
-            "compound": args.compound,
-            "date": args.date
-        }
+        payload = chunk['metadata'].copy()
+        payload['id'] = str(uuid.uuid4())
         vs.ingest(chunk['text'], payload)
         if i % 10 == 0:
             print(f"  Ingested {i}/{len(chunks)} chunks...")

@@ -67,7 +67,8 @@ class TestClinicalTrialsFetcher(unittest.TestCase):
         ingestor = PDFIngestor()
         
         transformed = self.fetcher.transform(self.sample_api_response)
-        chunks = ingestor.chunk_sections(transformed)
+        context = {"source": "CLINICALTRIALS", "doc_type": "Clinical Trial"}
+        chunks = ingestor.chunk_sections(transformed, context)
         
         # Verify chunks
         self.assertTrue(len(chunks) >= 2) # At least one for CLINICAL_STUDIES and one for ELIGIBILITY
