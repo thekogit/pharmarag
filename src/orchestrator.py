@@ -99,6 +99,7 @@ def expand_node(s: RAGState):
 def retrieve_node(s: RAGState):
     try:
         vs_instance = get_vs()
+        vs_instance._ensure_initialized()
         queries = s.get("expanded", [s["question"]])
         
         all_hits = {}
