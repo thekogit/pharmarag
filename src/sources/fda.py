@@ -10,12 +10,12 @@ class OpenFDAFetcher:
         """
         Fetches drug label data from openFDA by brand or generic name.
         """
-        query = f'?search=(openfda.brand_name:"{name}"+openfda.generic_name:"{name}")&limit={limit}'
-        url = self.BASE_URL + query
-        response = requests.get(url)
-        
-        if response.status_code != 200:
-            return []
+        params = {
+            "search": f'(openfda.brand_name:"{name}"+openfda.generic_name:"{name}")',
+            "limit": limit
+        }
+        response = requests.get(self.BASE_URL, params=params)
+        response.raise_for_status()
             
         return response.json().get("results", [])
 

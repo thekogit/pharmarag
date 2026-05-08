@@ -22,8 +22,8 @@ class TestOpenFDAFetcher(unittest.TestCase):
         # Verify
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0]["id"], "test_id")
-        self.assertIn("https://api.fda.gov/drug/label.json", mock_get.call_args[0][0])
-        self.assertIn('brand_name:"ibuprofen"', mock_get.call_args[0][0])
+        self.assertEqual(mock_get.call_args[0][0], "https://api.fda.gov/drug/label.json")
+        self.assertIn('brand_name:"ibuprofen"', mock_get.call_args[1]["params"]["search"])
 
     def test_transform(self):
         sample_result = {
@@ -50,6 +50,19 @@ class TestOpenFDAFetcher(unittest.TestCase):
         }
         transformed = self.fetcher.transform(sample_result)
         self.assertEqual(transformed["INDICATIONS"], "Indication 1\nIndication 2")
+
+    @patch("requests.get")
+    def test_fetch_by_name_404(self, mock_get):
+        # Configure mock for 404
+        mock_response = MagicMock()
+        mock_response.status_code = 404
+        mock_response.raise_for_status.side_effect = Exception("404 Client Error")
+        mock_get.return_value = mock_response
+
+        # Execute & Verify
+        with self.assertRaises(Exception) as cm:
+            self.fetcher.fetch_by_name("unknown_drug")
+        self.assertIn("404", str(cm.exception))
 
 if __name__ == "__main__":
     unittest.main()
