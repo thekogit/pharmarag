@@ -29,10 +29,22 @@ class InferenceEngine:
         self.context_size = os.getenv("CONTEXT_SIZE", "32768")
         self.port = os.getenv("LLAMA_PORT", "8080")
 
+    def is_running(self):
+        """
+        Checks if the llama-server is already running on the configured port.
+        """
+        import socket
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('localhost', int(self.port))) == 0
+
     def start(self, wait=True):
         """
-        Starts the llama-server. We enforce RotorQuant iso3 compression.
+        Starts the llama-server if it's not already running.
         """
+        if self.is_running():
+            print(f"InferenceEngine: llama-server already running on port {self.port}.")
+            return None
+
         if not self.server_path:
             print("FATAL: LLAMA_SERVER_PATH not found in environment.")
             print("Please add 'LLAMA_SERVER_PATH=C:\\path\\to\\llama-server.exe' to your .env file.")

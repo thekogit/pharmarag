@@ -97,46 +97,55 @@ def expand_node(s: RAGState):
     return {**s, "expanded": [s["question"]] + variations}
 
 def retrieve_node(s: RAGState):
-    vs_instance = get_vs()
-    queries = s.get("expanded", [s["question"]])
-    
-    all_hits = {}
-    for q in queries:
-        vector = vs_instance.embedder.encode(q).tolist()
-        search_result = vs_instance.client.query_points(
-            collection_name=vs_instance.collection_name,
-            query=vector,
-            limit=10
-        ).points
-        for hit in search_result:
-            if hit.id not in all_hits:
-                all_hits[hit.id] = hit
+    try:
+        vs_instance = get_vs()
+        queries = s.get("expanded", [s["question"]])
+        
+        all_hits = {}
+        for q in queries:
+            vector = vs_instance.embedder.encode(q).tolist()
+            search_result = vs_instance.client.query_points(
+                collection_name=vs_instance.collection_name,
+                query=vector,
+                limit=10
+            ).points
+            for hit in search_result:
+                if hit.id not in all_hits:
+                    all_hits[hit.id] = hit
 
-    unique_hits = list(all_hits.values())
-    if not unique_hits:
-        return {**s, "docs": [{"text": "No relevant documents found in the database.", "meta": {"source": "System", "doc_type": "Error"}}]}
+        unique_hits = list(all_hits.values())
+        if not unique_hits:
+            return {**s, "docs": [{"text": "No relevant documents found in the database.", "meta": {"source": "System", "doc_type": "Info"}}]}
 
-    # Reranking
-    reranker = get_reranker()
-    pairs = [[s["question"], (hit.payload.get("text") or hit.payload.get("content") or "")] for hit in unique_hits]
-    scores = reranker.predict(pairs)
-    
-    # Sort by score descending
-    scored_hits = sorted(zip(unique_hits, scores), key=lambda x: x[1], reverse=True)
-    top_hits = scored_hits[:5]
-    
-    docs = []
-    for hit, score in top_hits:
-        p = hit.payload or {}
-        text = p.get("text") or p.get("content") or ""
-        meta = p.get("meta")
-        if not meta or not isinstance(meta, dict):
-            meta = {k: v for k, v in p.items() if k not in ["text", "content"]}
-        docs.append({"text": text, "meta": meta})
+        # Reranking
+        reranker = get_reranker()
+        pairs = [[s["question"], (hit.payload.get("text") or hit.payload.get("content") or "")] for hit in unique_hits]
+        scores = reranker.predict(pairs)
+        
+        # Sort by score descending
+        scored_hits = sorted(zip(unique_hits, scores), key=lambda x: x[1], reverse=True)
+        top_hits = scored_hits[:5]
+        
+        docs = []
+        for hit, score in top_hits:
+            p = hit.payload or {}
+            text = p.get("text") or p.get("content") or ""
+            meta = p.get("meta")
+            if not meta or not isinstance(meta, dict):
+                meta = {k: v for k, v in p.items() if k not in ["text", "content"]}
+            docs.append({"text": text, "meta": meta})
 
-    return {**s, "docs": docs}
+        return {**s, "docs": docs}
+    except Exception as e:
+        print(f"ERROR in retrieve_node: {e}")
+        return {**s, "docs": [{"text": f"Connection Error: {str(e)}. Is Qdrant/Docker running?", "meta": {"source": "System", "doc_type": "Error"}}]}
 
 def synth_node(s: RAGState):
+    # If we have an error doc, just report it as the answer
+    for d in s["docs"]:
+        if d["meta"].get("doc_type") == "Error":
+            return {**s, "answer": f"I cannot provide an answer because of a system error: {d['text']}"}
+
     print(f"DEBUG: Retrieved {len(s['docs'])} documents.")
     for i, d in enumerate(s['docs']):
         print(f"DEBUG: Doc {i} source: {d['meta'].get('source', 'Unknown')}")
