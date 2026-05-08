@@ -92,6 +92,16 @@ class RAGState(TypedDict):
     answer: str
 
 def expand_node(s: RAGState):
+    # Fail-fast: Check Qdrant connection before doing expensive LLM expansion
+    try:
+        vs_instance = get_vs()
+        vs_instance.client.get_collections()
+    except Exception as e:
+        print(f"FAIL-FAST: Qdrant connection failed: {e}")
+        # We still continue to the next node which will handle the error properly, 
+        # but we skip the variations to save time/tokens.
+        return {**s, "expanded": [s["question"]]}
+
     variations_text = (expansion_prompt | get_llm() | StrOutputParser()).invoke({"question": s["question"]})
     variations = [v.strip() for v in variations_text.split("\n") if v.strip()]
     return {**s, "expanded": [s["question"]] + variations}
