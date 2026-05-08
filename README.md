@@ -8,76 +8,81 @@ The system is engineered to process clinical and regulatory data and synthesize 
 
 ### Data Sources
 The ingestion pipeline is capable of handling unstructured and semi-structured documents typically found in the pharmaceutical industry:
-*   **ClinicalTrials.gov:** Trial protocols, outcomes, and phase data.
-*   **openFDA:** Drug labels, adverse event reports, and enforcement actions.
-*   **PubMed:** Peer-reviewed biomedical literature.
-*   **EMA EPARs:** European Public Assessment Reports.
-*   **ICH Guidelines:** International Council for Harmonisation PDFs.
+*   **ClinicalTrials.gov (API):** Automated ingestion of trial protocols, outcomes, and phase data.
+*   **openFDA (API):** Real-time drug label data.
+*   **PubMed (API):** Automated search and fetch of peer-reviewed biomedical abstracts.
+*   **Local PDFs:** Regulatory documents, guidance, and ICH guidelines.
 
 ### Architectural Strategies & Choices
 
-1. **Master Prompt Synthesis**
-   *   Compliance is handled at runtime using a Master Prompt within a LangGraph state machine (`src/orchestrator.py`). The model is utilized strictly as a synthesis engine over the retrieved context and is instructed to cite sources or refuse to answer if the context is insufficient, thereby avoiding the catastrophic forgetting often associated with fine-tuning.
+1. **Regulatory-Aware Ingestion**
+   *   **Section Routing:** A `RegulatoryRouter` identifies standard FDA/EMA section headers (e.g., INDICATIONS, ADVERSE REACTIONS) using regex patterns.
+   *   **Specialized Chunking:** Narrative sections (Clinical Studies) are chunked at 1000 characters with 10% overlap, while dense sections (Dosage) are chunked at 500 characters with 0% overlap to maintain data integrity.
+   *   **Contextual Prepend:** Every text chunk is prepended with its section name (e.g., `[Section: DOSAGE]`) to preserve semantic context during retrieval.
 
-2. **RotorQuant `iso3` KV Cache (12GB VRAM Envelope)**
-   *   `Qwen3.5-9B-DeepSeek-V4-Flash` is served via `llama.cpp` using RotorQuant `iso3` compression. This results in a 10.3x reduction in memory footprint, allowing the inference engine to run on a single 12GB RTX 4070 Super. 
+2. **Two-Stage Retrieval & Reranking**
+   *   **Query Expansion:** The system uses the local LLM to generate 3 semantic variations of the user's query (clinical, regulatory, and safety-focused) to maximize recall.
+   *   **Reranking:** Top-20 candidates from vector search are reranked using a cross-encoder (`BAAI/bge-reranker-v2-m3`) to select the most relevant Top-5 chunks for synthesis.
 
-3. **CPU-Bound Embeddings (`src/vector_store.py`)**
-   *   To prevent Out Of Memory (OOM) crashes during concurrent inference and retrieval operations, the embedding model (`Octen-Embedding-4B`) is pinned strictly to the CPU.
+3. **Inference & VRAM Optimization**
+   *   **Model:** `Qwen3.5-9B-DeepSeek-V4-Flash` served via `llama.cpp`.
+   *   **Quantization:** RotorQuant `iso3` KV cache compression allows full context usage within a 12GB VRAM envelope (e.g., RTX 4070 Super).
+   *   **CPU-Bound Embeddings:** Embedding and reranking models are pinned to the CPU to prevent GPU OOM crashes.
 
-4. **Hybrid Search Vector DB (Qdrant)**
-   *   Qdrant is utilized for its native support of Hybrid Search. Dense semantic vectors (from Octen-Embedding-4B) are combined with sparse keyword vectors (BM25 via fastembed) to support both conceptual and exact-match queries.
-
-5. **PDF Parsing (`src/ingest.py`)**
-   *   `PyMuPDF` is implemented for fast text extraction, and `pdfplumber` is utilized for the structural extraction of complex regulatory tables.
+4. **Modern Interface**
+   *   **Chainlit UI:** A professional researcher-focused chat interface with clickable citation cards and side-panel source visualization.
+   *   **FastAPI Backend:** A production-ready API layer exposing `/query` and `/health` endpoints.
 
 ## 🛠 Configuration
 
-Pharma-RAG uses environment variables for all local paths and connection settings. 
-
 ### 1. Create your `.env` file
-Copy the provided template to start:
 ```bash
 cp .env.example .env
 ```
 
 ### 2. Configure Variable Definitions
-Open `.env` and fill in the following keys:
-
-| Variable | Description | Example / Default |
+| Variable | Description | Default |
 | :--- | :--- | :--- |
-| `LLAMA_SERVER_PATH` | **REQUIRED**. Absolute path to your compiled `llama-server.exe`. | `C:\tools\llama-server.exe` |
-| `MODEL_PATH` | **REQUIRED**. Path to your GGUF model file. | `./models/qwen3.5-9b.gguf` |
-| `LLAMA_PORT` | The port the local LLM server will listen on. | `8080` |
-| `NGL` | Number of layers to offload to GPU (set 0 for CPU-only). | `99` |
-| `QDRANT_HOST` | Hostname for your Qdrant instance. | `localhost` |
-| `QDRANT_PORT` | Port for your Qdrant instance. | `6333` |
-| `OPENAI_API_BASE` | Base URL for LLM requests (matches local server). | `http://localhost:8080/v1` |
-
-### 3. Troubleshooting Setup
-- **Server Not Starting:** Ensure `LLAMA_SERVER_PATH` is the absolute path to the `.exe`, not just the folder.
-- **Connection Refused:** If Qdrant is in Docker, ensure `QDRANT_PORT` matches the port mapped in your `docker-compose.yml`.
-- **Empty Answers:** Check the `DEBUG` logs in the terminal. If "Retrieved 0 documents" appears, verify that you have run the ingestion script first.
+| `LLAMA_SERVER_PATH` | Path to `llama-server.exe`. | `C:\tools\llama-server.exe` |
+| `MODEL_PATH` | Path to GGUF model file. | `./models/model.gguf` |
+| `LLAMA_PORT` | Local LLM server port. | `8080` |
+| `QDRANT_HOST` | Qdrant hostname. | `localhost` |
+| `QDRANT_PORT` | Qdrant port. | `6333` |
 
 ---
 
 ## 🚀 Usage
 
-The vector database runs in Docker, while the `llama.cpp` inference engine is managed automatically by the application.
+### 1. Boot the Vector DB
+```bash
+docker-compose up -d
+```
 
-1. **Boot the Vector DB**:
-   ```bash
-   docker-compose up -d
-   ```
+### 2. Ingest Data
+**Manual PDF Ingestion:**
+```bash
+python ingest_pdf.py path/to/document.pdf "FDA" "Label" --compound "Semaglutide" --date "2024-01-01"
+```
 
-2. **Ingest Documents**:
-   Parse a PDF, chunk it, and push it to the vector store:
-   ```bash
-   python ingest_pdf.py path/to/your/document.pdf "FDA" "Guidance Document"
-   ```
+**API Ingestion:**
+```bash
+python ingest_api.py --source clinical_trials --query "NCT06014450" --compound "Semaglutide"
+python ingest_api.py --source fda --query "Ozempic" --compound "Semaglutide" --limit 1
+python ingest_api.py --source pubmed --query "Semaglutide weight loss" --limit 5
+```
 
-3. **Query the System (Chat)**:
-   The interactive CLI will automatically start the `llama-server` if it is not running:
-   ```bash
-   python chat.py
-   ```
+### 3. Start the Interface
+**Chainlit UI (Recommended):**
+```bash
+chainlit run app.py
+```
+
+**FastAPI Backend:**
+```bash
+uvicorn src.api:app --host 0.0.0.0 --port 8000
+```
+
+**CLI Chat:**
+```bash
+python chat.py
+```
