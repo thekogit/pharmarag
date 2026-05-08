@@ -1,11 +1,11 @@
 import pytest
 from src.router import RegulatoryRouter
 
-def test_general_section():
+def test_unclassified_section():
     router = RegulatoryRouter()
     text = "Some random text before any headers"
     result = router.parse(text)
-    assert result == {"GENERAL": "Some random text before any headers"}
+    assert result == {"UNCLASSIFIED": "Some random text before any headers"}
 
 def test_multiple_sections():
     router = RegulatoryRouter()
