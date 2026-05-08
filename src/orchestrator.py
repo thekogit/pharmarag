@@ -3,6 +3,10 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langgraph.graph import StateGraph, END
 from typing import TypedDict, List
+import os
+from dotenv import load_dotenv
+from src.vector_store import VectorStore
+from sentence_transformers import CrossEncoder
 
 # The Master Prompt. We aren't doing fine-tuning. We force compliance right here.
 PHARMA_MASTER_PROMPT = """
@@ -23,13 +27,25 @@ Unless the user specifies otherwise, format your response strictly as follows:
 {ctx}
 """
 
+EXPANSION_PROMPT = """
+You are an expert at clinical and regulatory query expansion.
+The user is asking a question about pharmaceutical regulations or clinical data.
+Generate exactly 3 semantic variations of the following question.
+Each variation should focus on a different aspect (e.g., dosage, clinical trials, regulatory approval).
+Output ONLY the variations, one per line. Do not include numbering or extra text.
+
+Original Question: {question}
+"""
+
 synth_prompt = ChatPromptTemplate.from_messages([
     ("system", PHARMA_MASTER_PROMPT),
     ("human", "Query: {q}")
 ])
 
-import os
-from dotenv import load_dotenv
+expansion_prompt = ChatPromptTemplate.from_messages([
+    ("system", EXPANSION_PROMPT),
+    ("human", "{question}")
+])
 
 # Find the project root (one level up from src/)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -40,17 +56,34 @@ if os.path.exists(env_path):
 else:
     load_dotenv()
 
-from src.vector_store import VectorStore
+# Lazy initialization for VectorStore, LLM, and Reranker
+_vs = None
+_llm = None
+_reranker = None
 
-llm = ChatOpenAI(
-    base_url=os.getenv("OPENAI_API_BASE", "http://localhost:8080/v1"), api_key=os.getenv("OPENAI_API_KEY", "none"),
-    model="qwen3.5-9b-deepseek-v4-flash",
-    temperature=0.0,
-    max_tokens=2048,
-)
+def get_vs():
+    global _vs
+    if _vs is None:
+        _vs = VectorStore(host=os.getenv("QDRANT_HOST", "localhost"), port=int(os.getenv("QDRANT_PORT", 6333)))
+    return _vs
 
-# Connect to the local Qdrant instance
-vs = VectorStore(host=os.getenv("QDRANT_HOST", "localhost"), port=int(os.getenv("QDRANT_PORT", 6333)))
+def get_llm():
+    global _llm
+    if _llm is None:
+        _llm = ChatOpenAI(
+            base_url=os.getenv("OPENAI_API_BASE", "http://localhost:8080/v1"), 
+            api_key=os.getenv("OPENAI_API_KEY", "none"),
+            model="qwen3.5-9b-deepseek-v4-flash",
+            temperature=0.0,
+            max_tokens=2048,
+        )
+    return _llm
+
+def get_reranker():
+    global _reranker
+    if _reranker is None:
+        _reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", device="cpu")
+    return _reranker
 
 class RAGState(TypedDict):
     question: str
@@ -59,35 +92,49 @@ class RAGState(TypedDict):
     answer: str
 
 def expand_node(s: RAGState):
-    return {**s, "expanded": [s["question"]]}
+    variations_text = (expansion_prompt | get_llm() | StrOutputParser()).invoke({"question": s["question"]})
+    variations = [v.strip() for v in variations_text.split("\n") if v.strip()]
+    return {**s, "expanded": [s["question"]] + variations}
 
 def retrieve_node(s: RAGState):
-    # Actually fetch from Qdrant
-    vector = vs.embedder.encode(s["question"]).tolist()
-    search_result = vs.client.query_points(
-        collection_name=vs.collection_name,
-        query=vector,
-        limit=3
-    ).points
+    vs_instance = get_vs()
+    queries = s.get("expanded", [s["question"]])
+    
+    all_hits = {}
+    for q in queries:
+        vector = vs_instance.embedder.encode(q).tolist()
+        search_result = vs_instance.client.query_points(
+            collection_name=vs_instance.collection_name,
+            query=vector,
+            limit=10
+        ).points
+        for hit in search_result:
+            if hit.id not in all_hits:
+                all_hits[hit.id] = hit
+
+    unique_hits = list(all_hits.values())
+    if not unique_hits:
+        return {**s, "docs": [{"text": "No relevant documents found in the database.", "meta": {"source": "System", "doc_type": "Error"}}]}
+
+    # Reranking
+    reranker = get_reranker()
+    pairs = [[s["question"], (hit.payload.get("text") or hit.payload.get("content") or "")] for hit in unique_hits]
+    scores = reranker.predict(pairs)
+    
+    # Sort by score descending
+    scored_hits = sorted(zip(unique_hits, scores), key=lambda x: x[1], reverse=True)
+    top_hits = scored_hits[:5]
     
     docs = []
-    for hit in search_result:
+    for hit, score in top_hits:
         p = hit.payload or {}
-        # Support nested structure (current) or flat structure (legacy/other)
         text = p.get("text") or p.get("content") or ""
         meta = p.get("meta")
-        
         if not meta or not isinstance(meta, dict):
-            # If meta is missing or not a dict, treat the whole payload as meta
             meta = {k: v for k, v in p.items() if k not in ["text", "content"]}
-            
         docs.append({"text": text, "meta": meta})
 
-    # Fallback if DB is empty
-    if not docs:
-        docs = [{"text": "No relevant documents found in the database.", "meta": {"source": "System", "doc_type": "Error"}}]
-
-    return {**s, "docs": docs} 
+    return {**s, "docs": docs}
 
 def synth_node(s: RAGState):
     print(f"DEBUG: Retrieved {len(s['docs'])} documents.")
@@ -106,7 +153,7 @@ def synth_node(s: RAGState):
     if not has_content:
         print("DEBUG: No document content found. LLM might refuse to answer.")
 
-    answer = (synth_prompt | llm | StrOutputParser()).invoke({"ctx": ctx, "q": s["question"]})
+    answer = (synth_prompt | get_llm() | StrOutputParser()).invoke({"ctx": ctx, "q": s["question"]})
     return {**s, "answer": answer}
 
 
