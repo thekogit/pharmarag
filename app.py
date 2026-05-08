@@ -13,28 +13,32 @@ async def start():
     """
     Initializes the session, starts the inference engine, and checks dependencies.
     """
+    # Always set rag_app at the start to prevent NoneType errors in main()
+    cl.user_session.set("rag_app", rag_app)
+
     # 1. Start Inference Engine (llama-server) if not running
     engine = InferenceEngine()
     if not engine.is_running():
         await cl.Message(content="Starting Inference Engine (llama-server)...").send()
-        engine.start(wait=False)
-        # Give it a few seconds to initialize
-        time.sleep(5)
+        try:
+            engine.start(wait=False)
+            # Give it a few seconds to initialize
+            time.sleep(5)
+        except Exception as e:
+            await cl.Message(content=f"❌ **Failed to start Inference Engine:** {e}").send()
     
     # 2. Check Qdrant Connection
     vs = get_vs()
     qdrant_status = "Connected"
     try:
-        # Simple health check
+        # Check if Qdrant is reachable (this now uses the lazy _ensure_initialized)
         vs.client.get_collections()
-    except Exception:
+    except Exception as e:
         qdrant_status = "Disconnected (Check Docker/Qdrant)"
         await cl.Message(
-            content="⚠️ **Critical Error: Qdrant is not reachable.**\nPlease ensure your Qdrant container is running: `docker-compose up -d`"
+            content=f"⚠️ **Critical Error: Qdrant is not reachable.**\nDetails: {e}\n\nPlease ensure your Qdrant container is running: `docker-compose up -d`"
         ).send()
 
-    cl.user_session.set("rag_app", rag_app)
-    
     await cl.Message(
         content=f"""# PharmaRAG Assistant Initialized
 Status:
@@ -51,7 +55,11 @@ async def main(message: cl.Message):
     """
     Main message handler that invokes the RAG pipeline.
     """
-    rag_app = cl.user_session.get("rag_app")
+    rag_app_instance = cl.user_session.get("rag_app")
+    if not rag_app_instance:
+        # Fallback to the global instance if session one is missing (shouldn't happen with fix above)
+        from src.orchestrator import rag_app as global_rag_app
+        rag_app_instance = global_rag_app
     
     # Create an initial message to show progress/thinking
     msg = cl.Message(content="")
@@ -59,8 +67,7 @@ async def main(message: cl.Message):
 
     try:
         # Run the RAG pipeline asynchronously
-        # rag_app is a compiled LangGraph graph which supports ainvoke
-        response = await rag_app.ainvoke({"question": message.content})
+        response = await rag_app_instance.ainvoke({"question": message.content})
         
         answer = response.get("answer", "I'm sorry, I couldn't generate an answer.")
         docs = response.get("docs", [])
