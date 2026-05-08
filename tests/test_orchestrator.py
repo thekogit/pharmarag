@@ -1,13 +1,18 @@
 import unittest
 from unittest.mock import patch, MagicMock
-from src.orchestrator import synth_node, RAGState
+
+# Mock VectorStore before importing src.orchestrator to avoid Qdrant connection error
+with patch('src.vector_store.VectorStore'):
+    from src.orchestrator import synth_node, RAGState
 
 class TestOrchestrator(unittest.TestCase):
-    @patch('src.orchestrator.llm')
+    @patch('src.orchestrator.get_llm')
     @patch('src.orchestrator.synth_prompt')
     @patch('builtins.print')
-    def test_synth_node_logging(self, mock_print, mock_prompt, mock_llm):
+    def test_synth_node_logging(self, mock_print, mock_prompt, mock_get_llm):
         # Mock LLM and Prompt
+        mock_llm = MagicMock()
+        mock_get_llm.return_value = mock_llm
         mock_chain = MagicMock()
         mock_chain.invoke.return_value = "Mock Answer"
         mock_prompt.__or__.return_value.__or__.return_value = mock_chain
@@ -32,8 +37,8 @@ class TestOrchestrator(unittest.TestCase):
         # doc2: SOURCE METADATA: [S2 | T2]\nCONTENT:\nDose is 20mg -> ~54 chars
         # Total approx 115 chars
         
-        # Find the call with "DEBUG: Context length:"
-        log_calls = [call.args[0] for call in mock_print.call_args_list if "DEBUG: Context length:" in call.args[0]]
+        # Find the call with "DEBUG: Total Context length:"
+        log_calls = [call.args[0] for call in mock_print.call_args_list if "DEBUG: Total Context length:" in call.args[0]]
         self.assertTrue(len(log_calls) > 0)
         self.assertIn("chars.", log_calls[0])
         
