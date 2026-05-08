@@ -1,5 +1,6 @@
 import sys
 import os
+import argparse
 from dotenv import load_dotenv
 from src.ingest import PDFIngestor
 from src.vector_store import VectorStore
@@ -8,13 +9,18 @@ import uuid
 load_dotenv()
 
 def main():
-    if len(sys.argv) < 2:
-        print("Usage: python ingest_pdf.py <path_to_pdf> [source_name] [doc_type]")
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="Ingest a PDF into the PharmaRAG system.")
+    parser.add_argument("pdf_path", help="Path to the PDF file to ingest.")
+    parser.add_argument("source_name", nargs="?", default="Unknown Source", help="Source name of the document.")
+    parser.add_argument("doc_type", nargs="?", default="Document", help="Type of the document.")
+    parser.add_argument("--compound", default="Unknown Compound", help="Name of the drug/compound.")
+    parser.add_argument("--date", default="2024-01-01", help="Date of the document in ISO format.")
+    
+    args = parser.parse_args()
 
-    pdf_path = sys.argv[1]
-    source_name = sys.argv[2] if len(sys.argv) > 2 else "Unknown Source"
-    doc_type = sys.argv[3] if len(sys.argv) > 3 else "Document"
+    pdf_path = args.pdf_path
+    source_name = args.source_name
+    doc_type = args.doc_type
 
     if not os.path.exists(pdf_path):
         print(f"Error: File '{pdf_path}' not found.")
@@ -22,11 +28,8 @@ def main():
 
     print(f"Parsing PDF: {pdf_path}")
     ingestor = PDFIngestor()
-    content = ingestor.process(pdf_path)
-
-    # Very naive chunking for demonstration (split by paragraphs/newlines)
-    chunks = [c.strip() for c in content.split('\n\n') if len(c.strip()) > 50]
-    print(f"Split into {len(chunks)} chunks.")
+    chunks = ingestor.process(pdf_path)
+    print(f"Split into {len(chunks)} chunks using hierarchical routing.")
 
     print("Connecting to Qdrant Vector Store...")
     vs = VectorStore(
@@ -40,9 +43,12 @@ def main():
             "id": str(uuid.uuid4()),
             "source": source_name,
             "doc_type": doc_type,
-            "chunk_index": i
+            "section_name": chunk['metadata']['section'],
+            "chunk_index": i,
+            "compound": args.compound,
+            "date": args.date
         }
-        vs.ingest(chunk, payload)
+        vs.ingest(chunk['text'], payload)
         if i % 10 == 0:
             print(f"  Ingested {i}/{len(chunks)} chunks...")
 
