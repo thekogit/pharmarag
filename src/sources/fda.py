@@ -10,11 +10,21 @@ class OpenFDAFetcher:
         """
         Fetches drug label data from openFDA by brand or generic name.
         """
+        # openFDA uses '+' as AND by default. For 'either', use 'OR'.
+        # However, a general search on openfda fields is often more reliable.
+        search_query = f'openfda.brand_name:"{name}" OR openfda.generic_name:"{name}"'
         params = {
-            "search": f'(openfda.brand_name:"{name}"+openfda.generic_name:"{name}")',
+            "search": search_query,
             "limit": limit
         }
         response = requests.get(self.BASE_URL, params=params)
+        
+        if response.status_code == 404:
+            # Try a broader search if the specific field search fails
+            print(f"  FDA Specific search failed, trying broad search for: {name}")
+            params["search"] = f'"{name}"'
+            response = requests.get(self.BASE_URL, params=params)
+            
         response.raise_for_status()
             
         return response.json().get("results", [])

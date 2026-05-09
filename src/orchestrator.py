@@ -6,7 +6,7 @@ from typing import TypedDict, List
 import os
 from dotenv import load_dotenv
 from src.vector_store import VectorStore
-from sentence_transformers import CrossEncoder
+from llama_cpp import Llama
 
 # The Master Prompt. We aren't doing fine-tuning. We force compliance right here.
 PHARMA_MASTER_PROMPT = """
@@ -82,7 +82,17 @@ def get_llm():
 def get_reranker():
     global _reranker
     if _reranker is None:
-        _reranker = CrossEncoder("BAAI/bge-reranker-v2-m3", device="cpu")
+        model_path = os.getenv("RERANKER_PATH", "./models/mxbai-rerank-base-v2.i1-Q4_K_M.gguf")
+        if not os.path.exists(model_path):
+            print(f"WARNING: Reranker model not found at {model_path}. Proceeding without reranking.")
+            return None
+        # Load GGUF reranker via llama-cpp-python
+        _reranker = Llama(
+            model_path=model_path,
+            n_ctx=2048,
+            n_gpu_layers=0, # Keep on CPU to avoid OOM with the LLM
+            verbose=False
+        )
     return _reranker
 
 class RAGState(TypedDict):
@@ -98,8 +108,6 @@ def expand_node(s: RAGState):
         vs_instance.client.get_collections()
     except Exception as e:
         print(f"FAIL-FAST: Qdrant connection failed: {e}")
-        # We still continue to the next node which will handle the error properly, 
-        # but we skip the variations to save time/tokens.
         return {**s, "expanded": [s["question"]]}
 
     variations_text = (expansion_prompt | get_llm() | StrOutputParser()).invoke({"question": s["question"]})
@@ -128,14 +136,23 @@ def retrieve_node(s: RAGState):
         if not unique_hits:
             return {**s, "docs": [{"text": "No relevant documents found in the database.", "meta": {"source": "System", "doc_type": "Info"}}]}
 
-        # Reranking
+        # Reranking using GGUF model
         reranker = get_reranker()
-        pairs = [[s["question"], (hit.payload.get("text") or hit.payload.get("content") or "")] for hit in unique_hits]
-        scores = reranker.predict(pairs)
-        
-        # Sort by score descending
-        scored_hits = sorted(zip(unique_hits, scores), key=lambda x: x[1], reverse=True)
-        top_hits = scored_hits[:5]
+        if reranker:
+            scored_hits = []
+            for hit in unique_hits:
+                text = (hit.payload.get("text") or hit.payload.get("content") or "")
+                # mxbai-rerank heuristic: logprob of the first token as a score
+                prompt = f"query: {s['question']} document: {text}"
+                output = reranker(prompt, max_tokens=1, logprobs=1)
+                score = output["choices"][0]["logprobs"]["token_logprobs"][0] if output["choices"][0]["logprobs"] else 0
+                scored_hits.append((hit, score))
+            
+            scored_hits = sorted(scored_hits, key=lambda x: x[1], reverse=True)
+            top_hits = scored_hits[:5]
+        else:
+            # Fallback to top retrieval if reranker is missing
+            top_hits = [(hit, 0) for hit in unique_hits[:5]]
         
         docs = []
         for hit, score in top_hits:
@@ -152,7 +169,6 @@ def retrieve_node(s: RAGState):
         return {**s, "docs": [{"text": f"Connection Error: {str(e)}. Is Qdrant/Docker running?", "meta": {"source": "System", "doc_type": "Error"}}]}
 
 def synth_node(s: RAGState):
-    # If we have an error doc, just report it as the answer
     for d in s["docs"]:
         if d["meta"].get("doc_type") == "Error":
             return {**s, "answer": f"I cannot provide an answer because of a system error: {d['text']}"}
@@ -168,11 +184,6 @@ def synth_node(s: RAGState):
     )
     print(f"DEBUG: Total Context length: {len(ctx)} chars.")
     
-    # Check if we are sending any actual content to the LLM
-    has_content = any(len(d['text'].strip()) > 0 for d in s['docs'])
-    if not has_content:
-        print("DEBUG: No document content found. LLM might refuse to answer.")
-
     answer = (synth_prompt | get_llm() | StrOutputParser()).invoke({"ctx": ctx, "q": s["question"]})
     return {**s, "answer": answer}
 

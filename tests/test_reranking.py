@@ -10,15 +10,24 @@ def mock_vs():
         yield vs
 
 @pytest.fixture
-def mock_cross_encoder():
-    with patch("src.orchestrator.CrossEncoder") as mock:
-        encoder = MagicMock()
-        mock.return_value = encoder
-        # Mock predict to return scores in descending order for simplicity in some cases
-        # or just return what we expect.
-        yield encoder
+def mock_llama():
+    # Mocking llama_cpp.Llama instead of sentence_transformers.CrossEncoder
+    with patch("src.orchestrator.Llama") as mock:
+        llama_inst = MagicMock()
+        mock.return_value = llama_inst
+        # Mocking the call output for mxbai-rerank scoring heuristic
+        llama_inst.return_value = {
+            "choices": [
+                {
+                    "logprobs": {
+                        "token_logprobs": [0.8] # Default mock score
+                    }
+                }
+            ]
+        }
+        yield llama_inst
 
-def test_retrieve_node_reranking(mock_vs, mock_cross_encoder):
+def test_retrieve_node_reranking(mock_vs, mock_llama):
     # Setup state
     state: RAGState = {
         "question": "What is the dosage of drug X?",
@@ -28,14 +37,9 @@ def test_retrieve_node_reranking(mock_vs, mock_cross_encoder):
     }
 
     # Mock VectorStore search results
-    # Each query returns some hits, some overlapping
     hit1 = MagicMock(id=1, payload={"text": "doc1", "meta": {"source": "S1"}})
     hit2 = MagicMock(id=2, payload={"text": "doc2", "meta": {"source": "S2"}})
     hit3 = MagicMock(id=3, payload={"text": "doc3", "meta": {"source": "S3"}})
-    
-    # Query 0 (original) returns 1, 2
-    # Query 1 returns 2, 3
-    # Query 2 returns 1, 3
     
     mock_vs.client.query_points.side_effect = [
         MagicMock(points=[hit1, hit2]),
@@ -43,20 +47,20 @@ def test_retrieve_node_reranking(mock_vs, mock_cross_encoder):
         MagicMock(points=[hit1, hit3])
     ]
     
-    # Mock reranker scores
-    # We have 3 unique docs: 1, 2, 3
-    # Let's say doc 3 is the best, then 1, then 2
-    mock_cross_encoder.return_value.predict.return_value = [0.1, 0.5, 0.9] # scores for [doc1, doc2, doc3]
+    # Mock reranker scores for different docs
+    # doc3 > doc2 > doc1
+    mock_llama.side_effect = [
+        {"choices": [{"logprobs": {"token_logprobs": [0.1]}}]}, # doc1
+        {"choices": [{"logprobs": {"token_logprobs": [0.5]}}]}, # doc2
+        {"choices": [{"logprobs": {"token_logprobs": [0.9]}}]}, # doc3
+    ]
 
     # Run node
-    with patch("src.orchestrator.get_reranker", return_value=mock_cross_encoder.return_value):
+    with patch("src.orchestrator.get_reranker", return_value=mock_llama):
         result = retrieve_node(state)
 
     # Assertions
-    # 1. Deduplication: only 3 unique docs should be passed to reranker
-    # 2. Top-N: If we limit to Top-2 for this test (I'll use Top-5 in impl, but here it's 3 unique)
-    # The result should be sorted by score: doc3, doc2, doc1
-    
+    # Result should be sorted by score: doc3, doc2, doc1
     assert len(result["docs"]) == 3
     assert result["docs"][0]["text"] == "doc3"
     assert result["docs"][1]["text"] == "doc2"
@@ -64,6 +68,5 @@ def test_retrieve_node_reranking(mock_vs, mock_cross_encoder):
     
     # Verify mock calls
     assert mock_vs.client.query_points.call_count == 3
-    # Verify reranker was called with (question, [doc1_text, doc2_text, doc3_text])
-    # The actual implementation might pass list of pairs
-    # mock_cross_encoder.return_value.predict.assert_called_once()
+    # Llama (reranker) should be called 3 times (once per unique doc)
+    assert mock_llama.call_count == 3
