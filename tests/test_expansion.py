@@ -6,8 +6,13 @@ with patch('src.vector_store.VectorStore'):
     from src.orchestrator import expand_node, RAGState
 
 class TestExpansion(unittest.TestCase):
+    @patch('src.orchestrator.get_vs')
     @patch('src.orchestrator.get_llm')
-    def test_expand_node_generates_variations(self, mock_get_llm):
+    def test_expand_node_generates_variations(self, mock_get_llm, mock_get_vs):
+        # Setup mock Qdrant for fail-fast check
+        mock_vs = MagicMock()
+        mock_get_vs.return_value = mock_vs
+        
         # Setup mock LLM
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm

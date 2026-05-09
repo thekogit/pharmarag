@@ -22,12 +22,14 @@ The ingestion pipeline is capable of handling unstructured and semi-structured d
 
 2. **Two-Stage Retrieval & Reranking**
    *   **Query Expansion:** The system uses the local LLM to generate 3 semantic variations of the user's query (clinical, regulatory, and safety-focused) to maximize recall.
-   *   **Reranking:** Top-20 candidates from vector search are reranked using a cross-encoder (`BAAI/bge-reranker-v2-m3`) to select the most relevant Top-5 chunks for synthesis.
+   * **Embeddings (Recall):** `Octen-Embedding-4B` pinned to CPU for robust high-dimensional vectorization.
+   * **Reranking (Precision):** `mxbai-rerank-base-v2` (GGUF) used for two-stage retrieval to maximize relevance.
+   * **Inference (Synthesis):** `Qwen3.5-9B-DeepSeek-V4-Flash` served via `llama-server.exe` with RotorQuant `iso3` KV cache compression.
 
-3. **Inference & VRAM Optimization**
-   *   **Model:** `Qwen3.5-9B-DeepSeek-V4-Flash` served via `llama.cpp`.
-   *   **Quantization:** RotorQuant `iso3` KV cache compression allows full context usage within a 12GB VRAM envelope (e.g., RTX 4070 Super).
-   *   **CPU-Bound Embeddings:** Embedding and reranking models are pinned to the CPU to prevent GPU OOM crashes.
+   3. **Inference & Memory Optimization**
+    * **VRAM Envelope:** Designed for 12GB VRAM (e.g., RTX 4070 Super).
+    * **Dual-Inference Path:** LLM inference is handled by `llama-server.exe`, while reranking and embeddings are pinned to the CPU via `llama-cpp-python` and `sentence-transformers` to avoid GPU OOM.
+
 
 4. **Modern Interface**
    *   **Chainlit UI:** A professional researcher-focused chat interface with clickable citation cards and side-panel source visualization.
