@@ -1,4 +1,5 @@
 import requests
+from src.logger import logger
 
 class ClinicalTrialsFetcher:
     """
@@ -10,13 +11,15 @@ class ClinicalTrialsFetcher:
         """
         Fetches full study JSON from ClinicalTrials.gov V2 API by NCT ID.
         """
+        logger.info(f"Fetching Clinical Trial data for ID: {nct_id}")
         url = f"{self.BASE_URL}/{nct_id}"
-        response = requests.get(url)
-        
-        if response.status_code != 200:
-            raise Exception(f"Failed to fetch trial {nct_id}: {response.status_code}")
-            
-        return response.json()
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Failed to fetch trial {nct_id}: {e}")
+            raise
 
     def transform(self, data: dict) -> dict:
         """
@@ -52,7 +55,13 @@ class ClinicalTrialsFetcher:
             
         transformed = {
             "CLINICAL_STUDIES": clinical_studies_text,
-            "ELIGIBILITY": criteria
+            "ELIGIBILITY": criteria,
+            "_metadata": {
+                "source": "ClinicalTrials.gov",
+                "doc_type": "Trial Protocol",
+                "external_id": nct_id,
+                "title": brief_title
+            }
         }
         
         return transformed

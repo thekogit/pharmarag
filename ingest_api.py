@@ -8,6 +8,7 @@ from src.sources.fda import OpenFDAFetcher
 from src.sources.pubmed import PubMedFetcher
 from src.ingest import PDFIngestor
 from src.vector_store import VectorStore
+from src.logger import logger
 
 load_dotenv()
 
@@ -23,9 +24,12 @@ def main():
     date_val = args.date or datetime.now().strftime("%Y-%m-%d")
 
     ingestor = PDFIngestor()
-    vs = VectorStore()
+    vs = VectorStore(
+        host=os.getenv("QDRANT_HOST", "localhost"),
+        port=int(os.getenv("QDRANT_PORT", 6333))
+    )
 
-    print(f"Fetching from {args.source} for query: {args.query}...")
+    logger.info(f"Fetching from {args.source} for query: {args.query}...")
 
     chunks_to_ingest = []
     
@@ -35,48 +39,57 @@ def main():
         "date": date_val
     }
 
+    def process_fetcher_result(sections, base_context):
+        # Extract internal metadata if present
+        internal_meta = sections.pop("_metadata", {})
+        context = base_context.copy()
+        context.update(internal_meta)
+        return ingestor.chunk_sections(sections, context)
+
     if args.source == "clinical_trials":
         fetcher = ClinicalTrialsFetcher()
-        # Handle both single ID and potential future search
         try:
             data = fetcher.fetch_by_id(args.query)
             sections = fetcher.transform(data)
-            context = common_context.copy()
-            context["doc_type"] = "Clinical Trial"
-            chunks = ingestor.chunk_sections(sections, context)
+            chunks = process_fetcher_result(sections, common_context)
             chunks_to_ingest.extend(chunks)
         except Exception as e:
-            print(f"Error fetching from ClinicalTrials.gov: {e}")
+            logger.error(f"Error fetching from ClinicalTrials.gov: {e}")
 
     elif args.source == "fda":
         fetcher = OpenFDAFetcher()
-        results = fetcher.fetch_by_name(args.query, limit=args.limit)
-        for res in results:
-            sections = fetcher.transform(res)
-            context = common_context.copy()
-            context["doc_type"] = "Drug Label"
-            chunks = ingestor.chunk_sections(sections, context)
-            chunks_to_ingest.extend(chunks)
+        try:
+            results = fetcher.fetch_by_name(args.query, limit=args.limit)
+            for res in results:
+                sections = fetcher.transform(res)
+                chunks = process_fetcher_result(sections, common_context)
+                chunks_to_ingest.extend(chunks)
+        except Exception as e:
+            logger.error(f"Error fetching from FDA: {e}")
 
     elif args.source == "pubmed":
         fetcher = PubMedFetcher()
-        results = fetcher.fetch_abstracts(args.query, limit=args.limit)
-        for res in results:
-            sections = fetcher.transform(res)
-            context = common_context.copy()
-            context["doc_type"] = "Journal Article"
-            chunks = ingestor.chunk_sections(sections, context)
-            chunks_to_ingest.extend(chunks)
+        try:
+            results = fetcher.fetch_abstracts(args.query, limit=args.limit)
+            for res in results:
+                sections = fetcher.transform(res)
+                chunks = process_fetcher_result(sections, common_context)
+                chunks_to_ingest.extend(chunks)
+        except Exception as e:
+            logger.error(f"Error fetching from PubMed: {e}")
 
-    print(f"Ingesting {len(chunks_to_ingest)} chunks into Vector Store...")
+    logger.info(f"Ingesting {len(chunks_to_ingest)} chunks into Vector Store...")
     for i, chunk in enumerate(chunks_to_ingest):
         payload = chunk["metadata"].copy()
         payload["id"] = str(uuid.uuid4())
-        vs.ingest(chunk["text"], payload)
-        if i % 10 == 0:
-            print(f"  Ingested {i}/{len(chunks_to_ingest)} chunks...")
+        try:
+            vs.ingest(chunk["text"], payload)
+            if i > 0 and i % 10 == 0:
+                logger.info(f"  Ingested {i}/{len(chunks_to_ingest)} chunks...")
+        except Exception as e:
+            logger.error(f"Failed to ingest chunk {i}: {e}")
 
-    print("Ingestion complete!")
+    logger.info("Ingestion complete!")
 
 if __name__ == "__main__":
     main()

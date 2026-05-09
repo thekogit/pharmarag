@@ -41,6 +41,10 @@ class PDFIngestor:
     def chunk_sections(self, sections: dict, context: dict) -> List[dict]:
         all_chunks = []
         for section_name, text in sections.items():
+            # Skip internal metadata or non-string sections
+            if section_name.startswith("_") or not isinstance(text, str):
+                continue
+                
             if section_name in self.narrative_sections:
                 splitter = self.narrative_splitter
             else:

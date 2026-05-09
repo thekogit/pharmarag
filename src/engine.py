@@ -2,6 +2,7 @@ import subprocess
 import sys
 import os
 from dotenv import load_dotenv
+from src.logger import logger
 
 # Find the project root (one level up from src/)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,18 +43,22 @@ class InferenceEngine:
         Starts the llama-server if it's not already running.
         """
         if self.is_running():
-            print(f"InferenceEngine: llama-server already running on port {self.port}.")
+            logger.info(f"InferenceEngine: llama-server already running on port {self.port}.")
             return None
 
         if not self.server_path:
-            print("FATAL: LLAMA_SERVER_PATH not found in environment.")
-            print("Please add 'LLAMA_SERVER_PATH=C:\\path\\to\\llama-server.exe' to your .env file.")
+            logger.error("FATAL: LLAMA_SERVER_PATH not found in environment.")
+            logger.error("Please add 'LLAMA_SERVER_PATH=C:\\path\\to\\llama-server.exe' to your .env file.")
             sys.exit(1)
             
         if not os.path.exists(self.server_path):
-            print(f"FATAL: llama-server not found at {self.server_path}. Check your .env path.")
+            logger.error(f"FATAL: llama-server not found at {self.server_path}. Check your .env path.")
             sys.exit(1)
             
+        if not os.path.exists(self.model_path):
+            logger.error(f"FATAL: Model file not found at {self.model_path}. Run download_models.py first.")
+            sys.exit(1)
+
         cmd = [
             self.server_path,
             "-m", self.model_path,
@@ -67,7 +72,7 @@ class InferenceEngine:
             "--port", self.port
         ]
         
-        print(f"Executing: {' '.join(cmd)}")
+        logger.info(f"Executing: {' '.join(cmd)}")
         process = subprocess.Popen(cmd)
         if wait:
             process.wait()
