@@ -1,10 +1,11 @@
 import sys
 import os
 import argparse
+import uuid
 from dotenv import load_dotenv
 from src.ingest import PDFIngestor
 from src.vector_store import VectorStore
-import uuid
+from src.logger import logger
 
 load_dotenv()
 
@@ -23,10 +24,10 @@ def main():
     doc_type = args.doc_type
 
     if not os.path.exists(pdf_path):
-        print(f"Error: File '{pdf_path}' not found.")
+        logger.error(f"File '{pdf_path}' not found.")
         sys.exit(1)
 
-    print(f"Parsing PDF: {pdf_path}")
+    logger.info(f"Parsing PDF: {pdf_path}")
     ingestor = PDFIngestor()
     context = {
         "source": source_name,
@@ -34,24 +35,32 @@ def main():
         "compound": args.compound,
         "date": args.date
     }
-    chunks = ingestor.process(pdf_path, context)
-    print(f"Split into {len(chunks)} chunks using hierarchical routing.")
+    
+    try:
+        chunks = ingestor.process(pdf_path, context)
+        logger.info(f"Split into {len(chunks)} chunks using hierarchical routing.")
+    except Exception as e:
+        logger.error(f"Failed to process PDF: {e}")
+        sys.exit(1)
 
-    print("Connecting to Qdrant Vector Store...")
+    logger.info("Connecting to Qdrant Vector Store...")
     vs = VectorStore(
         host=os.getenv("QDRANT_HOST", "localhost"), 
         port=int(os.getenv("QDRANT_PORT", 6333))
     )
 
-    print("Embedding and storing chunks. This will hit your CPU hard. Wait...")
+    logger.info("Embedding and storing chunks. This will hit your CPU hard. Wait...")
     for i, chunk in enumerate(chunks):
         payload = chunk['metadata'].copy()
         payload['id'] = str(uuid.uuid4())
-        vs.ingest(chunk['text'], payload)
-        if i % 10 == 0:
-            print(f"  Ingested {i}/{len(chunks)} chunks...")
+        try:
+            vs.ingest(chunk['text'], payload)
+            if i > 0 and i % 10 == 0:
+                logger.info(f"  Ingested {i}/{len(chunks)} chunks...")
+        except Exception as e:
+            logger.error(f"Failed to ingest chunk {i}: {e}")
 
-    print("Ingestion complete!")
+    logger.info("Ingestion complete!")
 
 if __name__ == "__main__":
     main()

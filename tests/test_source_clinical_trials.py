@@ -56,6 +56,8 @@ class TestClinicalTrialsFetcher(unittest.TestCase):
         # Configure mock for 404
         mock_response = MagicMock()
         mock_response.status_code = 404
+        # Explicitly set raise_for_status to raise
+        mock_response.raise_for_status.side_effect = Exception("404 Client Error")
         mock_get.return_value = mock_response
 
         # Execute & Verify

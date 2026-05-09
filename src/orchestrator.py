@@ -6,15 +6,20 @@ from typing import TypedDict, List
 import os
 from dotenv import load_dotenv
 from src.vector_store import VectorStore
+from src.logger import logger
 from llama_cpp import Llama
 
 # The Master Prompt. We aren't doing fine-tuning. We force compliance right here.
 PHARMA_MASTER_PROMPT = """
 You are a Senior Regulatory Affairs and Clinical Data Specialist. Your task is to answer the user's query based STRICTLY and ONLY on the provided context documents.
 
+### INSTRUCTIONS:
+- Keep your internal thinking process extremely concise.
+- Focus on generating the final structured response.
+
 ### STRICT COMPLIANCE RULES:
 1. NO HALLUCINATION: If the context does not contain the information necessary to answer the prompt, you must explicitly state: "The provided regulatory and clinical documents do not contain sufficient information to answer this query."
-2. TRACEABILITY: You must cite the specific source for every factual claim. Use inline brackets referencing the 'source' or 'doc_type' metadata provided in the context (e.g., [ClinicalTrials.gov], [FDA Drug Label], [EMA EPAR]).
+2. TRACEABILITY: You must cite the specific source for every factual claim. Use inline brackets referencing the 'source' or 'doc_type' metadata provided in the context (e.g., [ClinicalTrials.gov], [FDA Drug Label], [PubMed]).
 3. PRECISION: Maintain a formal, objective, and scientific tone. Do not use speculative language.
 
 ### OUTPUT STRUCTURE:
@@ -64,7 +69,10 @@ _reranker = None
 def get_vs():
     global _vs
     if _vs is None:
-        _vs = VectorStore(host=os.getenv("QDRANT_HOST", "localhost"), port=int(os.getenv("QDRANT_PORT", 6333)))
+        _vs = VectorStore(
+            host=os.getenv("QDRANT_HOST", "localhost"), 
+            port=int(os.getenv("QDRANT_PORT", 6333))
+        )
     return _vs
 
 def get_llm():
@@ -73,9 +81,10 @@ def get_llm():
         _llm = ChatOpenAI(
             base_url=os.getenv("OPENAI_API_BASE", "http://localhost:8080/v1"), 
             api_key=os.getenv("OPENAI_API_KEY", "none"),
-            model="qwen3.5-9b-deepseek-v4-flash",
+            model=os.getenv("LLM_MODEL_NAME", "qwen2.5-7b-instruct-q4_k_m"),
             temperature=0.0,
-            max_tokens=2048,
+            max_tokens=4096,
+            timeout=120, # Increase timeout to 2 minutes
         )
     return _llm
 
@@ -84,13 +93,14 @@ def get_reranker():
     if _reranker is None:
         model_path = os.getenv("RERANKER_PATH", "./models/mxbai-rerank-base-v2.i1-Q4_K_M.gguf")
         if not os.path.exists(model_path):
-            print(f"WARNING: Reranker model not found at {model_path}. Proceeding without reranking.")
+            logger.warning(f"Reranker model not found at {model_path}. Proceeding without reranking.")
             return None
         # Load GGUF reranker via llama-cpp-python
         _reranker = Llama(
             model_path=model_path,
             n_ctx=2048,
             n_gpu_layers=0, # Keep on CPU to avoid OOM with the LLM
+            logits_all=True,
             verbose=False
         )
     return _reranker
@@ -105,29 +115,28 @@ def expand_node(s: RAGState):
     # Fail-fast: Check Qdrant connection before doing expensive LLM expansion
     try:
         vs_instance = get_vs()
+        # Simple health check
         vs_instance.client.get_collections()
     except Exception as e:
-        print(f"FAIL-FAST: Qdrant connection failed: {e}")
+        logger.error(f"FAIL-FAST: Qdrant connection failed: {e}")
         return {**s, "expanded": [s["question"]]}
 
-    variations_text = (expansion_prompt | get_llm() | StrOutputParser()).invoke({"question": s["question"]})
-    variations = [v.strip() for v in variations_text.split("\n") if v.strip()]
-    return {**s, "expanded": [s["question"]] + variations}
+    try:
+        variations_text = (expansion_prompt | get_llm() | StrOutputParser()).invoke({"question": s["question"]})
+        variations = [v.strip() for v in variations_text.split("\n") if v.strip()]
+        return {**s, "expanded": [s["question"]] + variations}
+    except Exception as e:
+        logger.warning(f"Query expansion failed: {e}. Using original query.")
+        return {**s, "expanded": [s["question"]]}
 
 def retrieve_node(s: RAGState):
     try:
         vs_instance = get_vs()
-        vs_instance._ensure_initialized()
         queries = s.get("expanded", [s["question"]])
         
         all_hits = {}
         for q in queries:
-            vector = vs_instance.embedder.encode(q).tolist()
-            search_result = vs_instance.client.query_points(
-                collection_name=vs_instance.collection_name,
-                query=vector,
-                limit=10
-            ).points
+            search_result = vs_instance.search(q, limit=10)
             for hit in search_result:
                 if hit.id not in all_hits:
                     all_hits[hit.id] = hit
@@ -151,42 +160,48 @@ def retrieve_node(s: RAGState):
             scored_hits = sorted(scored_hits, key=lambda x: x[1], reverse=True)
             top_hits = scored_hits[:5]
         else:
-            # Fallback to top retrieval if reranker is missing
             top_hits = [(hit, 0) for hit in unique_hits[:5]]
         
         docs = []
         for hit, score in top_hits:
             p = hit.payload or {}
             text = p.get("text") or p.get("content") or ""
-            meta = p.get("meta")
-            if not meta or not isinstance(meta, dict):
-                meta = {k: v for k, v in p.items() if k not in ["text", "content"]}
-            docs.append({"text": text, "meta": meta})
+            meta = p.get("meta") or {}
+            # Standardize source and doc_type for citations
+            meta_clean = {
+                "source": meta.get("source") or meta.get("source_name") or "Unknown Source",
+                "doc_type": meta.get("doc_type") or "Document",
+                "compound": meta.get("compound") or "N/A",
+                "date": meta.get("date") or "Unknown Date"
+            }
+            docs.append({"text": text, "meta": meta_clean})
 
         return {**s, "docs": docs}
     except Exception as e:
-        print(f"ERROR in retrieve_node: {e}")
-        return {**s, "docs": [{"text": f"Connection Error: {str(e)}. Is Qdrant/Docker running?", "meta": {"source": "System", "doc_type": "Error"}}]}
+        logger.error(f"Error in retrieve_node: {e}")
+        return {**s, "docs": [{"text": f"Retrieval Error: {str(e)}", "meta": {"source": "System", "doc_type": "Error"}}]}
 
 def synth_node(s: RAGState):
     for d in s["docs"]:
         if d["meta"].get("doc_type") == "Error":
             return {**s, "answer": f"I cannot provide an answer because of a system error: {d['text']}"}
 
-    print(f"DEBUG: Retrieved {len(s['docs'])} documents.")
-    for i, d in enumerate(s['docs']):
-        print(f"DEBUG: Doc {i} source: {d['meta'].get('source', 'Unknown')}")
-        print(f"DEBUG: Doc {i} text snippet: {d['text'][:50]}...")
-
+    logger.info(f"Retrieved {len(s['docs'])} documents for synthesis.")
+    
     ctx = "\n\n---\n\n".join(
-        f"SOURCE METADATA: [{d['meta'].get('source','Unknown')} | {d['meta'].get('doc_type','Unknown')}]\nCONTENT:\n{d['text']}" 
+        f"SOURCE: [{d['meta'].get('source', 'Unknown')} | {d['meta'].get('doc_type', 'Unknown')}]\n"
+        f"COMPOUND: {d['meta'].get('compound', 'N/A')}\n"
+        f"DATE: {d['meta'].get('date', 'Unknown')}\n"
+        f"CONTENT:\n{d['text']}" 
         for d in s["docs"]
     )
-    print(f"DEBUG: Total Context length: {len(ctx)} chars.")
     
-    answer = (synth_prompt | get_llm() | StrOutputParser()).invoke({"ctx": ctx, "q": s["question"]})
-    return {**s, "answer": answer}
-
+    try:
+        answer = (synth_prompt | get_llm() | StrOutputParser()).invoke({"ctx": ctx, "q": s["question"]})
+        return {**s, "answer": answer}
+    except Exception as e:
+        logger.error(f"Synthesis failed: {e}")
+        return {**s, "answer": "An error occurred while generating the final response."}
 
 def build_graph():
     graph = StateGraph(RAGState)

@@ -1,3 +1,4 @@
+from src.logger import logger
 import requests
 
 class OpenFDAFetcher:
@@ -10,6 +11,7 @@ class OpenFDAFetcher:
         """
         Fetches drug label data from openFDA by brand or generic name.
         """
+        logger.info(f"Fetching from openFDA for query: {name}")
         # openFDA uses '+' as AND by default. For 'either', use 'OR'.
         # However, a general search on openfda fields is often more reliable.
         search_query = f'openfda.brand_name:"{name}" OR openfda.generic_name:"{name}"'
@@ -21,7 +23,7 @@ class OpenFDAFetcher:
         
         if response.status_code == 404:
             # Try a broader search if the specific field search fails
-            print(f"  FDA Specific search failed, trying broad search for: {name}")
+            logger.info(f"  FDA Specific search failed, trying broad search for: {name}")
             params["search"] = f'"{name}"'
             response = requests.get(self.BASE_URL, params=params)
             
@@ -57,5 +59,17 @@ class OpenFDAFetcher:
                     transformed[section_name] += "\n" + text
                 else:
                     transformed[section_name] = text
+        
+        # Standardize metadata
+        label_id = result.get("id", "Unknown")
+        brand = result.get("openfda", {}).get("brand_name", ["Unknown"])[0]
+        
+        # We store common metadata in a separate dict to be merged during ingestion
+        transformed["_metadata"] = {
+            "source": "FDA",
+            "doc_type": "Drug Label",
+            "compound": brand,
+            "external_id": label_id
+        }
                     
         return transformed

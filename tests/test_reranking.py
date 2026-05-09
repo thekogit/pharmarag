@@ -27,7 +27,8 @@ def mock_llama():
         }
         yield llama_inst
 
-def test_retrieve_node_reranking(mock_vs, mock_llama):
+@patch("src.orchestrator.get_vs")
+def test_retrieve_node_reranking(mock_get_vs, mock_llama):
     # Setup state
     state: RAGState = {
         "question": "What is the dosage of drug X?",
@@ -36,17 +37,21 @@ def test_retrieve_node_reranking(mock_vs, mock_llama):
         "answer": ""
     }
 
+    # Mock VectorStore
+    mock_vs = MagicMock()
+    mock_get_vs.return_value = mock_vs
+
     # Mock VectorStore search results
     hit1 = MagicMock(id=1, payload={"text": "doc1", "meta": {"source": "S1"}})
     hit2 = MagicMock(id=2, payload={"text": "doc2", "meta": {"source": "S2"}})
     hit3 = MagicMock(id=3, payload={"text": "doc3", "meta": {"source": "S3"}})
-    
-    mock_vs.client.query_points.side_effect = [
-        MagicMock(points=[hit1, hit2]),
-        MagicMock(points=[hit2, hit3]),
-        MagicMock(points=[hit1, hit3])
+
+    mock_vs.search.side_effect = [
+        [hit1, hit2],
+        [hit2, hit3],
+        [hit1, hit3]
     ]
-    
+
     # Mock reranker scores for different docs
     # doc3 > doc2 > doc1
     mock_llama.side_effect = [
@@ -67,6 +72,6 @@ def test_retrieve_node_reranking(mock_vs, mock_llama):
     assert result["docs"][2]["text"] == "doc1"
     
     # Verify mock calls
-    assert mock_vs.client.query_points.call_count == 3
+    assert mock_vs.search.call_count == 3
     # Llama (reranker) should be called 3 times (once per unique doc)
     assert mock_llama.call_count == 3

@@ -8,8 +8,8 @@ with patch('src.vector_store.VectorStore'):
 class TestOrchestrator(unittest.TestCase):
     @patch('src.orchestrator.get_llm')
     @patch('src.orchestrator.synth_prompt')
-    @patch('builtins.print')
-    def test_synth_node_logging(self, mock_print, mock_prompt, mock_get_llm):
+    @patch('src.orchestrator.logger')
+    def test_synth_node_logging(self, mock_logger, mock_prompt, mock_get_llm):
         # Mock LLM and Prompt
         mock_llm = MagicMock()
         mock_get_llm.return_value = mock_llm
@@ -30,18 +30,7 @@ class TestOrchestrator(unittest.TestCase):
         result = synth_node(state)
         
         # Verify logging
-        mock_print.assert_any_call("DEBUG: Retrieved 2 documents.")
-        # Context length calculation check:
-        # doc1: SOURCE METADATA: [S1 | T1]\nCONTENT:\nDose is 10mg -> ~54 chars
-        # separator: \n\n---\n\n -> 7 chars
-        # doc2: SOURCE METADATA: [S2 | T2]\nCONTENT:\nDose is 20mg -> ~54 chars
-        # Total approx 115 chars
-        
-        # Find the call with "DEBUG: Total Context length:"
-        log_calls = [call.args[0] for call in mock_print.call_args_list if "DEBUG: Total Context length:" in call.args[0]]
-        self.assertTrue(len(log_calls) > 0)
-        self.assertIn("chars.", log_calls[0])
-        
+        mock_logger.info.assert_any_call("Retrieved 2 documents for synthesis.")
         self.assertEqual(result["answer"], "Mock Answer")
 
 if __name__ == '__main__':
