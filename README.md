@@ -1,10 +1,45 @@
 # Pharma-RAG
 
-A local-first Retrieval-Augmented Generation (RAG) pipeline designed for life science and regulatory data.
+A specialized Retrieval-Augmented Generation (RAG) pipeline for pharmaceutical regulatory compliance and clinical research.
 
-## System Architecture & Data Sources
+## 🧪 System Status & Validation
 
-The system is engineered to process clinical and regulatory data and synthesize answers grounded strictly in retrieved context.
+The system has been rigorously tested and validated:
+*   **Core Engine:** Verified with a suite of 20 clinical queries using local LLM inference (Negentropy-Claude-Opus-9B).
+*   **Data Pipeline:** Successfully tested for ingestion from openFDA, PubMed, and structured clinical trial data.
+*   **Hybrid Search:** Implemented and validated using BM25 sparse and dense vector retrieval with RRF fusion.
+*   **UI/UX:** Chainlit researcher interface verified for citation accuracy and source visualization.
+
+## 🚀 Quick Start
+
+### 1. Environment Setup
+Clone the repository and install dependencies:
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Configuration
+Create a `.env` file based on `.env.example`. The system supports both Docker-based Qdrant and local disk storage:
+```bash
+# To use local storage (no Docker required):
+QDRANT_PATH=./qdrant_storage
+```
+
+### 3. Model Preparation
+Download the optimized embedding and reranker models:
+```bash
+python download_models.py
+```
+
+### 4. Run the Pipeline
+```bash
+# Start the researcher UI
+chainlit run app.py
+```
+
+---
+
+## 🏗 System Architecture
 
 ### Data Sources
 The ingestion pipeline is capable of handling unstructured and semi-structured documents typically found in the pharmaceutical industry:
