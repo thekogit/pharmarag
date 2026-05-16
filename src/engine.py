@@ -25,8 +25,8 @@ class InferenceEngine:
         
         self.model_path = os.getenv("MODEL_PATH", legacy_model_path)
         self.ngl = os.getenv("NGL", "99")
-        self.cache_type_k = os.getenv("CACHE_TYPE_K", "iso3")
-        self.cache_type_v = os.getenv("CACHE_TYPE_V", "iso3")
+        self.cache_type_k = os.getenv("CACHE_TYPE_K", "q8_0")
+        self.cache_type_v = os.getenv("CACHE_TYPE_V", "q8_0")
         self.context_size = os.getenv("CONTEXT_SIZE", "32768")
         self.port = os.getenv("LLAMA_PORT", "8080")
 

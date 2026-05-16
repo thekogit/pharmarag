@@ -9,7 +9,7 @@ A specialized Retrieval-Augmented Generation (RAG) pipeline designed for high-st
 
 *   **Regulatory-Aware Processing**: Intelligent routing of FDA/EMA sections with context-preserving chunking.
 *   **High-Precision Inference**: Optimized for **Negentropy-Claude-Opus-9B**, delivering human-like clinical reasoning.
-*   **Hybrid Retrieval Engine**: Combines BM25 sparse keyword matching with dense vector embeddings (Octen-Embedding-4B).
+*   **Hybrid Retrieval Engine**: Combines BM25 sparse keyword matching with dense vector embeddings (**Octen-Embedding-4B**).
 *   **Researcher Interface**: Interactive Chainlit UI with side-panel source visualization and citation management.
 
 ---
@@ -22,6 +22,11 @@ A specialized Retrieval-Augmented Generation (RAG) pipeline designed for high-st
 | **Context Window** | 32,768 tokens |
 | **Validation Suite** | 20/20 Clinical Queries Passed |
 | **Retrieval Accuracy** | 100% Grounded in local context |
+
+### Inference Stack
+*   **LLM:** `Negentropy-claude-opus-4.7-9B-i1` (GGUF)
+*   **Server:** `llama-server.exe` with 32k context and full GPU offloading.
+*   **Retrieval:** Hybrid Search (BM25 + **Octen-Embedding-4B**) with `mxbai-rerank-base-v2` reranking.
 
 ---
 
