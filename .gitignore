@@ -5,3 +5,8 @@ qdrant_storage/
 models/
 
 logs/
+.chainlit/
+.files/
+logs/
+qdrant_storage/
+__pycache__/
