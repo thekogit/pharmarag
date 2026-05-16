@@ -35,6 +35,30 @@ The ingestion pipeline is capable of handling unstructured and semi-structured d
    *   **Chainlit UI:** A professional researcher-focused chat interface with clickable citation cards and side-panel source visualization.
    *   **FastAPI Backend:** A production-ready API layer exposing `/query` and `/health` endpoints.
 
+## 🧪 Testing & Validation
+
+The system has been validated using a comprehensive testing suite:
+
+### 1. Model Validation
+The system was tested using the following model:
+*   **LLM:** `Negentropy-claude-opus-4.7-9B-i1` (GGUF) served via `llama-server.exe`.
+*   **Configuration:** 32k context, 99 GPU layers.
+
+### 2. Automated Test Suite
+A suite of 20 diverse clinical and regulatory queries was executed against the RAG pipeline, covering:
+*   Indications and Usage
+*   Dosage and Administration
+*   Adverse Reactions and Safety Profile
+*   Clinical Trial Outcomes
+*   Storage and Handling
+
+**Results:** All 20 tests passed successfully with accurate, grounded responses and correct source attribution.
+
+### 3. Interface Testing
+The Chainlit UI was verified to boot correctly and maintain connectivity with the backend RAG orchestrator.
+
+---
+
 ## 🛠 Configuration
 
 ### 1. Create your `.env` file
