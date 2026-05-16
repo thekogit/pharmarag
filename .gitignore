@@ -6,3 +6,8 @@ models/
 docs/superpowers/
 
 logs/
+.chainlit/
+.files/
+logs/
+qdrant_storage/
+__pycache__/
