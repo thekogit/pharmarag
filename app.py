@@ -23,7 +23,8 @@ async def start():
         try:
             engine.start(wait=False)
             # Give it a few seconds to initialize
-            time.sleep(5)
+            import asyncio
+            await asyncio.sleep(5)
         except Exception as e:
             await cl.Message(content=f"❌ **Failed to start Inference Engine:** {e}").send()
     
