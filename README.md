@@ -67,6 +67,3 @@ chainlit run app.py
 *   **`src/sources/`**: API connectors (FDA, PubMed, ClinicalTrials).
 
 ---
-
-## 📜 License
-This project is licensed under the MIT License - see the LICENSE file for details.
