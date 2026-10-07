@@ -75,3 +75,36 @@ class PDFIngestor:
             sections["TABLES"] = tables.strip()
             
         return self.chunk_sections(sections, context)
+
+    def process_pdf(self, pdf_path: str, compound: str = "Unknown"):
+        """
+        High-level method to process a PDF and ingest it directly into the vector store.
+        Used by the ingestion CLI and examples in README.
+        """
+        from src.orchestrator import get_vs
+        vs = get_vs()
+        
+        context = {
+            "source": os.path.basename(pdf_path),
+            "doc_type": "PDF Document",
+            "compound": compound
+        }
+        
+        logger.info(f"Processing and ingesting PDF: {pdf_path}")
+        chunks = self.process(pdf_path, context)
+        
+        for chunk in chunks:
+            vs.ingest(chunk["text"], chunk["metadata"])
+            
+        logger.info(f"Successfully ingested {len(chunks)} chunks from {pdf_path}")
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Ingest a PDF into PharmaRAG")
+    parser.add_argument("pdf_path", help="Path to the PDF file")
+    parser.add_argument("--compound", default="Unknown", help="Name of the pharmaceutical compound")
+    
+    args = parser.parse_args()
+    
+    ingestor = PDFIngestor()
+    ingestor.process_pdf(args.pdf_path, compound=args.compound)
