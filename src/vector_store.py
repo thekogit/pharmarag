@@ -2,11 +2,17 @@
 # CPU-side Octen-Embedding-4B restricted to CPU to avoid GPU OOM.
 
 import os
+import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, SparseVectorParams, SparseVector, PointStruct, Prefetch, FusionQuery, Fusion
 from sentence_transformers import SentenceTransformer
 from fastembed import SparseTextEmbedding
 from src.logger import logger
+
+
+def make_point_id(text: str, payload: dict) -> str:
+    return str(payload.get("id") or uuid.uuid5(uuid.NAMESPACE_URL, text))
+
 
 class VectorStore:
     def __init__(self, host=None, port=6333, path=None):
@@ -58,7 +64,7 @@ class VectorStore:
                 self.client.create_collection(
                     collection_name=self.collection_name,
                     vectors_config={
-                        "dense": VectorParams(size=2560, distance=Distance.COSINE)
+                        "dense": VectorParams(size=self.embedder.get_sentence_embedding_dimension(), distance=Distance.COSINE)
                     },
                     sparse_vectors_config={
                         "sparse": SparseVectorParams()
@@ -96,7 +102,7 @@ class VectorStore:
                 "meta": payload
             }
             
-            point_id = payload.get("id") or str(hash(text))
+            point_id = make_point_id(text, payload)
             
             self.client.upsert(
                 collection_name=self.collection_name,
@@ -117,19 +123,32 @@ class VectorStore:
             logger.error(f"Failed to ingest chunk: {e}\n{traceback.format_exc()}")
             raise
 
-    def search(self, query: str, limit: int = 10):
+    def search(self, query: str, limit: int = 10, mode: str = "hybrid"):
         self._ensure_initialized()
         dense_vector = self.embedder.encode(query).tolist()
         
+        if mode == "dense":
+            return self.client.query_points(collection_name=self.collection_name, query=dense_vector, using="dense", limit=limit).points
+
         sparse_result = list(self.sparse_embedder.embed([query]))[0]
+        
+        # Handle both SparseEmbedding object and dict (for different fastembed versions)
+        if hasattr(sparse_result, "indices"):
+            indices = sparse_result.indices
+            values = sparse_result.values
+        else:
+            indices = sparse_result["indices"]
+            values = sparse_result["values"]
+
         sparse_vector = SparseVector(
-            indices=sparse_result.indices.tolist(),
-            values=sparse_result.values.tolist()
+            indices=indices.tolist() if hasattr(indices, "tolist") else list(indices),
+            values=values.tolist() if hasattr(values, "tolist") else list(values)
         )
         
+        if mode == "sparse":
+            return self.client.query_points(collection_name=self.collection_name, query=sparse_vector, using="sparse", limit=limit).points
+
         # Native Hybrid Search (Fusion)
-        # Note: Depending on Qdrant version, you might use Prefetch or separate calls
-        # Here we use the query_points API which is cleaner in newer versions
         results = self.client.query_points(
             collection_name=self.collection_name,
             prefetch=[
