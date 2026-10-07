@@ -7,7 +7,7 @@ import os
 from dotenv import load_dotenv
 from src.vector_store import VectorStore
 from src.logger import logger
-from llama_cpp import Llama
+from sentence_transformers import CrossEncoder
 
 # The Master Prompt. We aren't doing fine-tuning. We force compliance right here.
 PHARMA_MASTER_PROMPT = """
@@ -57,9 +57,9 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 env_path = os.path.join(project_root, '.env')
 
 if os.path.exists(env_path):
-    load_dotenv(env_path)
+    load_dotenv(env_path, override=True)
 else:
-    load_dotenv()
+    load_dotenv(override=True)
 
 # Lazy initialization for VectorStore, LLM, and Reranker
 _vs = None
@@ -90,19 +90,10 @@ def get_llm():
 
 def get_reranker():
     global _reranker
+    if os.getenv("RERANK", "1") != "1":
+        return None
     if _reranker is None:
-        model_path = os.getenv("RERANKER_PATH", "./models/mxbai-rerank-base-v2.i1-Q4_K_M.gguf")
-        if not os.path.exists(model_path):
-            logger.warning(f"Reranker model not found at {model_path}. Proceeding without reranking.")
-            return None
-        # Load GGUF reranker via llama-cpp-python
-        _reranker = Llama(
-            model_path=model_path,
-            n_ctx=2048,
-            n_gpu_layers=0, # Keep on CPU to avoid OOM with the LLM
-            logits_all=True,
-            verbose=False
-        )
+        _reranker = CrossEncoder(os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"), device="cpu")
     return _reranker
 
 class RAGState(TypedDict):
@@ -136,29 +127,21 @@ def retrieve_node(s: RAGState):
         
         all_hits = {}
         for q in queries:
-            search_result = vs_instance.search(q, limit=10)
+            search_result = vs_instance.search(q, limit=10, mode=os.getenv("RETRIEVAL_MODE", "hybrid"))
             for hit in search_result:
                 if hit.id not in all_hits:
                     all_hits[hit.id] = hit
 
         unique_hits = list(all_hits.values())
         if not unique_hits:
-            return {**s, "docs": [{"text": "No relevant documents found in the database.", "meta": {"source": "System", "doc_type": "Info"}}]}
+            return {**s, "docs": []}
 
-        # Reranking using GGUF model
+        # Reranking using CrossEncoder model
         reranker = get_reranker()
         if reranker:
-            scored_hits = []
-            for hit in unique_hits:
-                text = (hit.payload.get("text") or hit.payload.get("content") or "")
-                # mxbai-rerank heuristic: logprob of the first token as a score
-                prompt = f"query: {s['question']} document: {text}"
-                output = reranker(prompt, max_tokens=1, logprobs=1)
-                score = output["choices"][0]["logprobs"]["token_logprobs"][0] if output["choices"][0]["logprobs"] else 0
-                scored_hits.append((hit, score))
-            
-            scored_hits = sorted(scored_hits, key=lambda x: x[1], reverse=True)
-            top_hits = scored_hits[:5]
+            texts = [(h.payload.get("text") or h.payload.get("content") or "") for h in unique_hits]
+            scores = reranker.predict([(s["question"], t) for t in texts])
+            top_hits = sorted(zip(unique_hits, scores), key=lambda x: float(x[1]), reverse=True)[:5]
         else:
             top_hits = [(hit, 0) for hit in unique_hits[:5]]
         
@@ -179,12 +162,12 @@ def retrieve_node(s: RAGState):
         return {**s, "docs": docs}
     except Exception as e:
         logger.error(f"Error in retrieve_node: {e}")
-        return {**s, "docs": [{"text": f"Retrieval Error: {str(e)}", "meta": {"source": "System", "doc_type": "Error"}}]}
+        return {**s, "docs": []}
 
 def synth_node(s: RAGState):
-    for d in s["docs"]:
-        if d["meta"].get("doc_type") == "Error":
-            return {**s, "answer": f"I cannot provide an answer because of a system error: {d['text']}"}
+    if not s["docs"]:
+        logger.warning("No documents found for synthesis.")
+        return {**s, "answer": "The provided regulatory and clinical documents do not contain sufficient information to answer this query. \n\n*Note: The local database appears to be empty or missing data for this specific query. Consider using the `ingest_drug.py` script to populate it.*"}
 
     logger.info(f"Retrieved {len(s['docs'])} documents for synthesis.")
     
