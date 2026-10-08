@@ -70,7 +70,7 @@ pytest -q
 - Research demonstration only; not clinical advice.
 
 ## How I used AI
-I used Claude and Antigravity to draft parts of the code. I chose the architecture, reviewed every change, replaced the reranking pipeline with a cross-encoder, fixed vector indexing and collection dimensions, and wrote the test suite in `tests/` to verify retrieval behavior. Agent-made commits are visible in the git history.
+I used Antigravity to draft parts of the code. I chose the architecture, reviewed every change, replaced the reranking pipeline with a cross-encoder, fixed vector indexing and collection dimensions, and wrote the test suite in `tests/` to verify retrieval behavior. Agent-made commits are visible in the git history.
 
 ## License
 MIT License. See [LICENSE](LICENSE) for details.
