@@ -28,19 +28,19 @@ Answering queries across lengthy, heavily regulated technical documents—with s
 - Cited answers with inline source attribution and deterministic refusal when evidence is absent.
 
 ## Results
-Evaluation across 35 curated regulatory queries (30 answerable queries across semaglutide, metformin, atorvastatin, apixaban, and sertraline labels, plus 5 unanswerable out-of-scope queries) measured using `eval/run_eval.py`:
+The evaluation harness tests retrieval accuracy (Hit@5, MRR), fact recall, and refusal precision across 35 curated regulatory queries (30 answerable queries across semaglutide, metformin, atorvastatin, apixaban, and sertraline labels, plus 5 unanswerable out-of-scope controls) via `eval/run_eval.py`:
 
 ```bash
 python eval/run_eval.py eval/questions.jsonl
 ```
 
-| Config | Hit@5 | MRR | Fact recall | Correct refusals | False refusals | Median latency (s) |
-|---|---|---|---|---|---|---|
-| dense, rerank=0 | 0.667 | 0.485 | 0.533 | 5/5 | 4 | 0.8 |
-| hybrid, rerank=0 | 0.833 | 0.682 | 0.767 | 5/5 | 2 | 1.1 |
-| hybrid, rerank=1 | 0.900 | 0.814 | 0.867 | 5/5 | 1 | 1.6 |
+| Config | Status | Metrics Evaluated |
+|---|---|---|
+| Dense, Rerank=0 | Harness configured | Hit@5, MRR, Fact recall, Refusal precision, Latency |
+| Hybrid, Rerank=0 | Harness configured | Hit@5, MRR, Fact recall, Refusal precision, Latency |
+| Hybrid, Rerank=1 | Harness configured | Hit@5, MRR, Fact recall, Refusal precision, Latency |
 
-Hybrid search captures exact numerical dosages and compound tokens missed by dense search alone, while cross-encoder reranking elevates the most relevant regulatory section to top ranks (MRR 0.814) with minimal latency overhead.
+*Ablation benchmark results pending local LLM server execution. Full benchmark queries and evaluation code are committed in `eval/questions.jsonl` and `eval/run_eval.py`.*
 
 ## Quickstart
 Compatible with Python 3.10–3.12 and any OpenAI-compatible local model server (tested with Qwen 2.5 7B Instruct via llama-server):
@@ -53,7 +53,18 @@ source .venv/bin/activate  # on Windows: .venv\Scripts\activate
 pip install torch --index-url https://download.pytorch.org/whl/cpu
 pip install -r requirements.txt
 cp .env.example .env
+
+# Ingestion:
+# 1. Ingest local drug-label PDF into Qdrant
 python ingest_cli.py label.pdf --compound semaglutide
+# 2. Or fetch directly from openFDA REST API
+python ingest_drug.py semaglutide
+
+# Query:
+# Interactive CLI query session
+python chat.py
+# Or launch the Chainlit web interface
+chainlit run app.py
 ```
 
 ## Tests
@@ -70,7 +81,7 @@ pytest -q
 - Research demonstration only; not clinical advice.
 
 ## How I used AI
-I used Antigravity to draft parts of the code. I chose the architecture, reviewed every change, replaced the reranking pipeline with a cross-encoder, fixed vector indexing and collection dimensions, and wrote the test suite in `tests/` to verify retrieval behavior. Agent-made commits are visible in the git history.
+I used Antigravity and Gemini CLI Agent to draft parts of the code. I chose the architecture, reviewed every change, replaced the reranking pipeline with a cross-encoder, fixed vector indexing and collection dimensions, and wrote the test suite in `tests/` to verify retrieval behavior. Agent-made commits are visible in the git history.
 
 ## License
 MIT License. See [LICENSE](LICENSE) for details.
