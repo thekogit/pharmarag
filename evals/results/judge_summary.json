@@ -1,0 +1,48 @@
+{
+ "judge": "hf.co/mradermacher/prometheus-7b-v2.0-GGUF:Q5_K_M",
+ "absolute": {
+  "baseline": {
+   "abstention": {
+    "PASS": 72,
+    "FAIL": 32,
+    "unparsed": 0,
+    "pass_rate": 0.692
+   },
+   "faithfulness": {
+    "PASS": 58,
+    "FAIL": 27,
+    "unparsed": 0,
+    "pass_rate": 0.682
+   },
+   "conflict_disclosure": {
+    "PASS": 1,
+    "FAIL": 8,
+    "unparsed": 0,
+    "pass_rate": 0.111
+   }
+  },
+  "diagnostic": {
+   "abstention": {
+    "PASS": 67,
+    "FAIL": 37,
+    "unparsed": 0,
+    "pass_rate": 0.644
+   },
+   "faithfulness": {
+    "PASS": 57,
+    "FAIL": 28,
+    "unparsed": 0,
+    "pass_rate": 0.671
+   }
+  }
+ },
+ "pairwise": {
+  "pairs": 104,
+  "position_consistent": 59,
+  "position_consistency": 0.567,
+  "wins": {
+   "baseline": 50,
+   "diagnostic": 9
+  }
+ }
+}

@@ -1,12 +1,17 @@
+# Optional: run Qdrant as a server instead of the default embedded mode (QDRANT_PATH).
+# Then set QDRANT_URL=http://localhost:6333 in .env and rebuild the index.
+# Resource caps keep the service within roughly 20% of a 8-core / 32 GB host.
 services:
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.20.0  # matches qdrant-client 1.20 in uv.lock
     container_name: pharmarag-qdrant
     ports:
       - "${QDRANT_PORT:-6333}:6333"
-      - "${QDRANT_GRPC_PORT:-6334}:6334"
     volumes:
-      - ./qdrant_storage:/qdrant/storage
-    env_file:
-      - .env
+      - ./qdrant_server_storage:/qdrant/storage
+    deploy:
+      resources:
+        limits:
+          cpus: "1.6"
+          memory: 6G
     restart: unless-stopped

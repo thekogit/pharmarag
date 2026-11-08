@@ -1,0 +1,115 @@
+{
+ "built": "2026-11-08",
+ "labels": [
+  {
+   "compound": "semaglutide",
+   "set_id": "adec4fd2-6858-4c99-91d4-531f5f2a2d79",
+   "publisher": "Novo Nordisk (Ozempic)",
+   "effective_date": "2026-06-01",
+   "spl_version": 20,
+   "title": "These highlights do not include all the information needed to use OZEMPIC \u00ae  safely and effectively. See full prescribing information for OZEMPIC.     OZEMPIC (semaglutide) injection, for subcutaneous use   Initial U.S. Approval: 2017",
+   "current": true,
+   "chunks": 218
+  },
+  {
+   "compound": "semaglutide",
+   "set_id": "35902e95-e00c-47ae-8f4e-ba17d41881ce",
+   "publisher": "A-S Medication Solutions (Ozempic, 2021 repackage)",
+   "effective_date": "2021-01-14",
+   "spl_version": 1,
+   "title": "These highlights do not include all the information needed to use OZEMPIC \u00ae  safely and effectively. See full prescribing information for OZEMPIC.     OZEMPIC (semaglutide) injection, for subcutaneous use   Initial U.S. Approval: 2017",
+   "current": false,
+   "chunks": 157
+  },
+  {
+   "compound": "metformin",
+   "set_id": "4e4c4ba9-65c6-4273-8f6b-2423ab521dad",
+   "publisher": "ScieGen Pharmaceuticals (metformin hydrochloride tablets)",
+   "effective_date": "2026-08-21",
+   "spl_version": 10,
+   "title": "These highlights do not include all the information needed to use METFORMIN HYDROCHLORIDE TABLETS safely and effectively. See full prescribing information for METFORMIN HYDROCHLORIDE TABLETS.     METFORMIN HYDROCHLORIDE tablets, for oral use     Initial U.S. Approval: 1995",
+   "current": true,
+   "chunks": 110
+  },
+  {
+   "compound": "atorvastatin",
+   "set_id": "a60cc18b-0631-4cf0-b021-9f52224ece65",
+   "publisher": "Viatris (Lipitor)",
+   "effective_date": "2024-04-15",
+   "spl_version": 8,
+   "title": "These highlights do not include all the information needed to use LIPITOR safely and effectively. See full prescribing information for LIPITOR.   LIPITOR\u00ae (atorvastatin calcium) tablets, for oral use Initial U.S. Approval: 1996",
+   "current": true,
+   "chunks": 144
+  },
+  {
+   "compound": "atorvastatin",
+   "set_id": "10a7ba02-42d6-4cae-8904-b256e2da5496",
+   "publisher": "Physicians Total Care (Lipitor, 2011 repackage)",
+   "effective_date": "2009-08-06",
+   "spl_version": 5,
+   "title": "These highlights do not include all the information needed to use LIPITOR safely and effectively. See full prescribing information for LIPITOR. LIPITOR\u00ae (atorvastatin calcium) Tablets for oral administration Initial U.S. Approval: 1996",
+   "current": false,
+   "chunks": 134
+  },
+  {
+   "compound": "apixaban",
+   "set_id": "e9481622-7cc6-418a-acb6-c5450daae9b0",
+   "publisher": "E.R. Squibb & Sons (Eliquis)",
+   "effective_date": "2025-04-17",
+   "spl_version": 30,
+   "title": "These highlights do not include all the information needed to use ELIQUIS safely and effectively. See full prescribing information for ELIQUIS.   ELIQUIS \u00ae  (apixaban) tablets, for oral use ELIQUIS \u00ae  (apixaban) tablets for oral suspension ELIQUIS \u00ae  SPRINKLE (apixaban) for oral suspension Initial U",
+   "current": true,
+   "chunks": 211
+  },
+  {
+   "compound": "apixaban",
+   "set_id": "fd383ae7-1e34-44ef-b8f1-ca6906dfbcef",
+   "publisher": "A-S Medication Solutions (Eliquis, 2023 repackage)",
+   "effective_date": "2023-05-01",
+   "spl_version": 1,
+   "title": "These highlights do not include all the information needed to use ELIQUIS safely and effectively. See full prescribing information for ELIQUIS.   ELIQUIS \u00ae  (apixaban) tablets, for oral use Initial U.S. Approval: 2012",
+   "current": false,
+   "chunks": 131
+  },
+  {
+   "compound": "sertraline",
+   "set_id": "fda754f6-d0f3-4dce-a17a-927d64f912f7",
+   "publisher": "Viatris (Zoloft)",
+   "effective_date": "2023-08-08",
+   "spl_version": 7,
+   "title": "These highlights do not include all the information needed to use ZOLOFT safely and effectively. See full prescribing information for ZOLOFT.   ZOLOFT (sertraline hydrochloride) tablets, for oral use ZOLOFT (sertraline hydrochloride) oral solution Initial U.S. Approval: 1991",
+   "current": true,
+   "chunks": 150
+  },
+  {
+   "compound": "sertraline",
+   "set_id": "c3b0b1f8-abfd-4054-8645-fd076305f4f8",
+   "publisher": "Stat Rx USA (Zoloft, 2010 repackage)",
+   "effective_date": "2010-12-17",
+   "spl_version": 1,
+   "title": "Neuroleptic Malignant Syndrome (NMS) or NMS-Like Reactions",
+   "current": false,
+   "chunks": 155
+  }
+ ],
+ "chunks": 1410,
+ "chunks_current": 833,
+ "by_kind": {
+  "text": 1290,
+  "table": 120
+ },
+ "coherence_gate": {
+  "tables": 120,
+  "tables_with_footnote_markers": 60,
+  "tables_with_unbound_footnotes": 32,
+  "issues": {
+   "unbound_footnote:\u2020": 10,
+   "unbound_footnote:\u00a7": 2,
+   "unbound_footnote:\u00b6": 4,
+   "unbound_footnote:*": 20,
+   "unbound_footnote:\u00f0": 1,
+   "unbound_footnote:\u00f8": 1,
+   "unbound_footnote:\u2021": 9
+  }
+ }
+}
