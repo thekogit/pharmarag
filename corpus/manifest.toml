@@ -1,0 +1,52 @@
+# The benchmark corpus: DailyMed SPL set ids, fetched by `python -m scripts.fetch_corpus`.
+#
+# Each compound has the manufacturer's current label. Four compounds also have an older label
+# of the same product published by a repackager. Those older labels are real, superseded
+# versions (different dosing, contraindications or warnings), so the freshness gate and the
+# contradiction detector are tested on genuine version conflicts, not synthetic ones.
+# Which label is current is decided at ingest time from the SPL effectiveTime, not here.
+
+[[label]]
+compound = "semaglutide"
+set_id = "adec4fd2-6858-4c99-91d4-531f5f2a2d79"
+publisher = "Novo Nordisk (Ozempic)"
+
+[[label]]
+compound = "semaglutide"
+set_id = "35902e95-e00c-47ae-8f4e-ba17d41881ce"
+publisher = "A-S Medication Solutions (Ozempic, 2021 repackage)"
+
+[[label]]
+compound = "metformin"
+set_id = "4e4c4ba9-65c6-4273-8f6b-2423ab521dad"
+publisher = "ScieGen Pharmaceuticals (metformin hydrochloride tablets)"
+
+[[label]]
+compound = "atorvastatin"
+set_id = "a60cc18b-0631-4cf0-b021-9f52224ece65"
+publisher = "Viatris (Lipitor)"
+
+[[label]]
+compound = "atorvastatin"
+set_id = "10a7ba02-42d6-4cae-8904-b256e2da5496"
+publisher = "Physicians Total Care (Lipitor, 2011 repackage)"
+
+[[label]]
+compound = "apixaban"
+set_id = "e9481622-7cc6-418a-acb6-c5450daae9b0"
+publisher = "E.R. Squibb & Sons (Eliquis)"
+
+[[label]]
+compound = "apixaban"
+set_id = "fd383ae7-1e34-44ef-b8f1-ca6906dfbcef"
+publisher = "A-S Medication Solutions (Eliquis, 2023 repackage)"
+
+[[label]]
+compound = "sertraline"
+set_id = "fda754f6-d0f3-4dce-a17a-927d64f912f7"
+publisher = "Viatris (Zoloft)"
+
+[[label]]
+compound = "sertraline"
+set_id = "c3b0b1f8-abfd-4054-8645-fd076305f4f8"
+publisher = "Stat Rx USA (Zoloft, 2010 repackage)"
