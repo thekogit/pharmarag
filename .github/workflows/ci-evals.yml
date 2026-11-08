@@ -1,0 +1,25 @@
+name: ci-evals
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install (locked)
+        run: uv sync --locked --group dev
+      - name: Lint
+        run: uv run ruff check .
+      - name: Type check (strict)
+        run: uv run mypy
+      - name: Unit tests
+        run: uv run pytest -q
+      - name: Level 1 assertions on the committed traces
+        run: uv run python -m evals.level1 baseline diagnostic diagnostic_no_freshness --assert
