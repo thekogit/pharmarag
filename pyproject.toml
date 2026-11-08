@@ -1,0 +1,56 @@
+[project]
+name = "pharmarag"
+version = "0.2.0"
+description = "Diagnostic RAG over FDA drug labels: table-aware parsing, hybrid retrieval, pre-generation gates, verbatim grounding and a local judge."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "docling>=2.15",
+    "qdrant-client>=1.12",
+    "fastembed>=0.5",
+    "sentence-transformers>=3.0",
+    "httpx>=0.27",
+    "openai>=1.50",
+    "pydantic>=2.7",
+    "python-dotenv>=1.0",
+    "langgraph>=0.2",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
+]
+
+[project.optional-dependencies]
+ui = ["chainlit>=2.0"]
+
+[dependency-groups]
+dev = ["pytest>=8", "mypy>=1.11", "ruff>=0.6"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = ["integration: needs Ollama, the cloud LLM, downloaded models or the internet"]
+addopts = "-m 'not integration'"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+# Prometheus-2 prompt templates are kept verbatim.
+"evals/judge.py" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "evals", "scripts"]
+explicit_package_bases = true
+
+[[tool.mypy.overrides]]
+module = ["docling.*", "docling_core.*", "fastembed.*", "sentence_transformers.*", "chainlit.*"]
+ignore_missing_imports = true
