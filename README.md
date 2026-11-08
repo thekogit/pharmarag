@@ -131,26 +131,30 @@ What this shows, and what it doesn't:
 ### Local judge (Level 2)
 
 `python -m evals.judge --configs baseline diagnostic`, 2026-11-08: Prometheus-2-7B (Q5_K_M) on local
-Ollama, binary single-criterion rubrics, 387 verdicts, 0 unparseable.
+Ollama, binary single-criterion rubrics, 387 verdicts per run, 0 unparseable. The judge ran twice.
+**v1** used the original abstention rubric. **v2** adds to that rubric that declining is the correct
+answer when the passages lack the information. v2 was written *after* seeing v1's results on this
+same set, so it is a post-hoc fix, not a calibrated judge. v1 output is kept in
+`evals/results/judge_v1_*`.
 
-| Criterion (PASS rate) | baseline | diagnostic |
-|---|---|---|
-| Faithfulness to the passages | 59/85 (0.69) | 58/85 (0.68) |
-| Abstention | 69/104 (0.66) | 59/104 (0.57) |
-| Conflict disclosure (traces with a detected conflict) | 1/9 | none reached the context |
+| Criterion, PASS rate | baseline v1 | baseline v2 | diagnostic v1 | diagnostic v2 |
+|---|---|---|---|---|
+| Faithfulness to the passages | 59/85 | 58/85 | 58/85 | 57/85 |
+| Abstention | 69/104 | 72/104 | 59/104 | 67/104 |
+| Conflict disclosure (traces with a detected conflict) | 1/9 | 1/9 | none reached the context | none reached the context |
+| Correct out-of-scope refusals judged PASS | 0/15 | 8/15 | 0/15 | 9/15 |
 
-Pairwise (baseline vs diagnostic, judged twice with A/B swapped): the same winner in both orders in
-61/104 pairs (position consistency **0.587**). Among those 61, the baseline won 49 and the diagnostic
-pipeline 12.
+Pairwise, baseline vs diagnostic, judged twice with A/B swapped: the same winner in both orders in
+61/104 pairs for v1 (0.587) and 59/104 for v2 (0.567). Among consistent pairs the baseline won 49–12
+(v1) and 50–9 (v2).
 
-**These judge numbers should not be trusted yet, and the traces show why.** The judge marked
-"abstention" as FAIL on **all 30** correct refusals of out-of-scope questions (15 per pipeline). For
-example, it failed the refusal of "In what year was Novo Nordisk founded?" because the answer "makes a
-general statement about the passages not containing sufficient information" (trace
-`diagnostic:q100`). It penalises declining to answer
-regardless of whether declining is right, which also drags down the stricter pipeline's scores. The
-pairwise preference for the baseline comes with 41% position flips, and is consistent with a bias toward
-longer free-text answers. The deterministic Level 1 checks above remain the primary result. The judge
+**Don't trust the judge numbers yet.** Every one of those 30 out-of-scope questions was correctly
+refused, and the judge still failed all 30 refusals under v1 and 13 under v2. For example, v1 failed
+the refusal of "In what year was Novo Nordisk founded?" because the answer "makes a general statement
+about the passages not containing sufficient information" (trace `diagnostic:q100`). A judge that
+penalises correct refusals also penalises the stricter pipeline. The pairwise preference for the
+baseline comes with more than 40% position flips, and is consistent with a bias toward longer
+free-text answers. The deterministic Level 1 checks above remain the primary result, and the judge
 gets a verdict on its reliability once human labels exist (below).
 
 ### Human calibration
