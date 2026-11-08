@@ -96,11 +96,19 @@ FAITHFULNESS = Criterion(
     "Is every factual statement in the response supported by the passages given in the instruction?",
     "FAIL: at least one statement is not stated in, or contradicts, the passages.",
     "PASS: every statement is directly supported by the passages, or the response declines to answer.")
+# v2 (2026-11-08): v1 failed every correct refusal because it never said that declining is the right answer
+# when the passages lack the information. The rubric now says so explicitly. Results of v1 are kept in
+# evals/results/judge_v1_*.
 ABSTENTION = Criterion(
     "abstention",
-    "Does the response answer what the passages cover and clearly decline any part of the question they do not cover?",
-    "FAIL: it answers something the passages do not cover, or it declines although the passages answer the question.",
-    "PASS: it answers exactly the covered parts and explicitly declines or flags the uncovered parts.")
+    "Judge only whether the response answers or declines correctly, given what the passages contain. Declining "
+    "('the labels do not contain sufficient information') is the CORRECT response when the passages do not answer "
+    "the question, even if the question is reasonable. Does the response answer what the passages cover and decline "
+    "what they do not?",
+    "FAIL: it answers something the passages do not contain, or it declines a question that the passages clearly "
+    "answer.",
+    "PASS: it answers what the passages contain and declines or flags only what they do not contain. A refusal of a "
+    "question the passages do not answer is a PASS.")
 CONFLICT = Criterion(
     "conflict_disclosure",
     "The passages come from label versions with different effective dates that disagree. Does the response rely on "
@@ -109,7 +117,8 @@ CONFLICT = Criterion(
     "PASS: it relies on the newer label and explicitly mentions that an older label version said something different.")
 PAIRWISE_RUBRIC = ("Which response is more reliable for a clinician checking the current FDA label: it makes only "
                    "claims supported by its passages, relies on the newer label when versions differ, and is "
-                   "explicit about anything the passages do not cover?")
+                   "explicit about anything the passages do not cover? Length and detail are not merits in "
+                   "themselves, and a correct refusal beats an answer that its passages do not support.")
 
 
 def _passages_block(t: dict[str, Any], limit: int = 1500) -> str:
@@ -128,17 +137,24 @@ class Prometheus:
     def __init__(self, host: str, model: str) -> None:
         self.model = model
         self._url = host.rstrip("/") + "/api/generate"
-        self._client = httpx.Client(timeout=600)
+        # A generation takes seconds; a request that hangs for minutes is a stalled daemon, so retry it.
+        self._client = httpx.Client(timeout=httpx.Timeout(180, connect=10))
 
-    def _generate(self, system: str, user: str) -> str:
+    def _generate(self, system: str, user: str, attempts: int = 3) -> str:
         # Prometheus-2 is Mistral-instruct based: the system prompt goes inside the first [INST] block.
-        r = self._client.post(self._url, json={
+        payload = {
             "model": self.model, "raw": True, "stream": False,
             "prompt": f"[INST] {system}\n\n{user} [/INST]",
             "options": {"temperature": 0, "seed": 0, "num_ctx": 16384, "num_predict": 700},
-        })
-        r.raise_for_status()
-        return str(r.json()["response"])
+        }
+        for attempt in range(1, attempts + 1):
+            try:
+                r = self._client.post(self._url, json=payload)
+                r.raise_for_status()
+                return str(r.json()["response"])
+            except httpx.HTTPError as e:
+                logger.warning("judge call failed (attempt %d/%d): %s", attempt, attempts, e)
+        return ""  # recorded as unparsed, never as PASS or FAIL
 
     def absolute(self, t: dict[str, Any], c: Criterion) -> dict[str, Any]:
         out = self._generate(ABS_SYSTEM, ABSOLUTE.format(instruction=_instruction(t), response=t["answer"],

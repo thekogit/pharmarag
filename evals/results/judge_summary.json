@@ -3,16 +3,16 @@
  "absolute": {
   "baseline": {
    "abstention": {
-    "PASS": 69,
-    "FAIL": 35,
+    "PASS": 72,
+    "FAIL": 32,
     "unparsed": 0,
-    "pass_rate": 0.663
+    "pass_rate": 0.692
    },
    "faithfulness": {
-    "PASS": 59,
-    "FAIL": 26,
+    "PASS": 58,
+    "FAIL": 27,
     "unparsed": 0,
-    "pass_rate": 0.694
+    "pass_rate": 0.682
    },
    "conflict_disclosure": {
     "PASS": 1,
@@ -23,26 +23,26 @@
   },
   "diagnostic": {
    "abstention": {
-    "PASS": 59,
-    "FAIL": 45,
+    "PASS": 67,
+    "FAIL": 37,
     "unparsed": 0,
-    "pass_rate": 0.567
+    "pass_rate": 0.644
    },
    "faithfulness": {
-    "PASS": 58,
-    "FAIL": 27,
+    "PASS": 57,
+    "FAIL": 28,
     "unparsed": 0,
-    "pass_rate": 0.682
+    "pass_rate": 0.671
    }
   }
  },
  "pairwise": {
   "pairs": 104,
-  "position_consistent": 61,
-  "position_consistency": 0.587,
+  "position_consistent": 59,
+  "position_consistency": 0.567,
   "wins": {
-   "baseline": 49,
-   "diagnostic": 12
+   "baseline": 50,
+   "diagnostic": 9
   }
  }
 }
