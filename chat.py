@@ -1,56 +1,28 @@
-import sys
-import time
-import urllib.request
-from src.orchestrator import rag_app
-from src.engine import InferenceEngine
+"""Interactive CLI. Answers go to stdout, logs to stderr."""
 
-def is_server_ready(url):
-    try:
-        with urllib.request.urlopen(f"{url}/health") as response:
-            return response.getcode() == 200
-    except:
-        return False
+from __future__ import annotations
 
-def main():
-    engine = InferenceEngine()
-    base_url = f"http://localhost:{engine.port}"
-    
-    if not is_server_ready(base_url):
-        print("Llama server not responding. Starting it...")
-        engine.start(wait=False)
-        
-        print("Waiting for server to initialize...")
-        for _ in range(30):
-            if is_server_ready(base_url):
-                print("Server is READY.")
-                break
-            time.sleep(1)
-        else:
-            print("FATAL: Server failed to start in time.")
-            sys.exit(1)
+from src import log
+from src.pipeline import build_pipeline
 
-    print("==================================================")
-    print(" Pharma-RAG Interactive CLI (Type 'exit' to quit) ")
-    print("==================================================")
-    
+
+def main() -> None:
+    log.setup()
+    pipe = build_pipeline()
+    print(f"PharmaRAG-Diagnostic ({pipe.cfg.name}: {pipe.cfg.mode}, rerank={pipe.cfg.rerank}, "
+          f"freshness={pipe.cfg.freshness}, gates={pipe.cfg.gates}, grounding={pipe.cfg.grounding}). "
+          "Type 'exit' to quit.")
     while True:
         try:
-            query = input("\nQuery: ")
-            if query.lower() in ['exit', 'quit']:
-                break
-            if not query.strip():
-                continue
-                
-            print("\nSearching Qdrant and consulting Master Prompt...")
-            result = rag_app.invoke({'question': query})
-            
-            print('\n--- Answer ---')
-            print(result['answer'])
-            print('--------------')
-        except KeyboardInterrupt:
+            q = input("\nQuestion: ").strip()
+        except (EOFError, KeyboardInterrupt):
             break
-        except Exception as e:
-            print(f"Error: {e}")
+        if q.lower() in {"exit", "quit"}:
+            break
+        if q:
+            out = pipe.run(q)
+            print(f"\n{out['answer']}\n\n[outcome: {out['outcome']}]")
+
 
 if __name__ == "__main__":
     main()
